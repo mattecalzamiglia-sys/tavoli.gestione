@@ -162,6 +162,7 @@
             const [showImportGuests, setShowImportGuests] = useState(false);
             const [menu, setMenu] = useState([]);
             const [orders, setOrders] = useState([]);
+            const [waiterCalls, setWaiterCalls] = useState([]);
             const [selectedPr, setSelectedPr] = useState(null);
             const [selectedTable, setSelectedTable] = useState(null);
             const [draggedTable, setDraggedTable] = useState(null);
@@ -268,6 +269,24 @@
                 } catch (error) {
                     setOrders([]);
                 }
+
+                try {
+                    const callsResult = await window.storage.get(`muse-waiter-calls-${eventId}`, true);
+                    if (callsResult) {
+                        const allCalls = JSON.parse(callsResult.value);
+                        // Show only pending calls from last hour
+                        const recentCalls = allCalls.filter(c => {
+                            const callTime = new Date(c.createdAt);
+                            const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+                            return c.status === 'pending' && callTime > hourAgo;
+                        });
+                        setWaiterCalls(recentCalls);
+                    } else {
+                        setWaiterCalls([]);
+                    }
+                } catch (error) {
+                    setWaiterCalls([]);
+                }
             };
 
             const saveEvents = async (newEvents) => {
@@ -359,6 +378,22 @@
 
             const getTotalRevenue = () => {
                 return orders.reduce((sum, o) => sum + o.total, 0);
+            };
+
+            const clearWaiterCall = async (callId) => {
+                try {
+                    const callsResult = await window.storage.get(`muse-waiter-calls-${currentEvent.id}`, true);
+                    if (callsResult) {
+                        let allCalls = JSON.parse(callsResult.value);
+                        allCalls = allCalls.map(c => 
+                            c.id === callId ? { ...c, status: 'completed' } : c
+                        );
+                        await window.storage.set(`muse-waiter-calls-${currentEvent.id}`, JSON.stringify(allCalls), true);
+                        setWaiterCalls(waiterCalls.filter(c => c.id !== callId));
+                    }
+                } catch (error) {
+                    console.error('Error clearing call:', error);
+                }
             };
 
             const createEvent = async (eventData) => {
@@ -883,6 +918,38 @@
                                                 <div className="text-center py-8 text-purple-300">
                                                     <p>Nessun prodotto nel menu</p>
                                                     <p className="text-sm mt-2">Aggiungi prodotti per abilitare gli ordini</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6 mb-6">
+                                        <h2 className="text-2xl font-bold text-white mb-4">
+                                            🔔 Chiamate Cameriere {waiterCalls.length > 0 && `(${waiterCalls.length})`}
+                                        </h2>
+                                        <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                            {waiterCalls.map(call => (
+                                                <div
+                                                    key={call.id}
+                                                    className="bg-orange-500/20 border border-orange-400/50 rounded-lg p-4 flex justify-between items-center animate-pulse"
+                                                >
+                                                    <div>
+                                                        <div className="text-white font-bold text-lg">Tavolo {call.tableNumber}</div>
+                                                        <div className="text-orange-300 text-sm">
+                                                            {new Date(call.createdAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => clearWaiterCall(call.id)}
+                                                        className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold"
+                                                    >
+                                                        ✓ Servito
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {waiterCalls.length === 0 && (
+                                                <div className="text-center py-6 text-purple-300">
+                                                    <p className="text-sm">Nessuna chiamata in attesa</p>
                                                 </div>
                                             )}
                                         </div>
