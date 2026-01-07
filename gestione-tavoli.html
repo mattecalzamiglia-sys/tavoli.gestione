@@ -113,6 +113,36 @@
             </svg>
         );
 
+        const Package = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>
+            </svg>
+        );
+
+        const UserCheck = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>
+            </svg>
+        );
+
+        const Clock = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+        );
+
+        const Minus = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14"/>
+            </svg>
+        );
+
+        const AlertTriangle = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>
+            </svg>
+        );
+
         // Simple localStorage wrapper for compatibility
         const storage = {
             async get(key) {
@@ -163,6 +193,10 @@
             const [menu, setMenu] = useState([]);
             const [orders, setOrders] = useState([]);
             const [waiterCalls, setWaiterCalls] = useState([]);
+            const [inventory, setInventory] = useState([]);
+            const [staff, setStaff] = useState([]);
+            const [showInventoryView, setShowInventoryView] = useState(false);
+            const [showStaffView, setShowStaffView] = useState(false);
             const [selectedPr, setSelectedPr] = useState(null);
             const [selectedTable, setSelectedTable] = useState(null);
             const [draggedTable, setDraggedTable] = useState(null);
@@ -287,6 +321,28 @@
                 } catch (error) {
                     setWaiterCalls([]);
                 }
+
+                try {
+                    const inventoryResult = await window.storage.get(`muse-inventory-${eventId}`, true);
+                    if (inventoryResult) {
+                        setInventory(JSON.parse(inventoryResult.value));
+                    } else {
+                        setInventory([]);
+                    }
+                } catch (error) {
+                    setInventory([]);
+                }
+
+                try {
+                    const staffResult = await window.storage.get(`muse-staff-${eventId}`, true);
+                    if (staffResult) {
+                        setStaff(JSON.parse(staffResult.value));
+                    } else {
+                        setStaff([]);
+                    }
+                } catch (error) {
+                    setStaff([]);
+                }
             };
 
             const saveEvents = async (newEvents) => {
@@ -394,6 +450,119 @@
                 } catch (error) {
                     console.error('Error clearing call:', error);
                 }
+            };
+
+            // INVENTORY MANAGEMENT
+            const saveInventory = async (eventId, newInventory) => {
+                try {
+                    await window.storage.set(`muse-inventory-${eventId}`, JSON.stringify(newInventory), true);
+                    setInventory(newInventory);
+                } catch (error) {
+                    console.error('Error saving inventory:', error);
+                }
+            };
+
+            const addInventoryItem = async (item) => {
+                const newItem = {
+                    id: Date.now().toString(),
+                    ...item,
+                    initialStock: item.quantity,
+                    currentStock: item.quantity,
+                    manualConsumption: 0,
+                    createdAt: new Date().toISOString()
+                };
+                await saveInventory(currentEvent.id, [...inventory, newItem]);
+            };
+
+            const updateInventoryItem = async (itemId, updates) => {
+                const newInventory = inventory.map(i =>
+                    i.id === itemId ? { ...i, ...updates } : i
+                );
+                await saveInventory(currentEvent.id, newInventory);
+            };
+
+            const removeInventoryItem = async (itemId) => {
+                const newInventory = inventory.filter(i => i.id !== itemId);
+                await saveInventory(currentEvent.id, newInventory);
+            };
+
+            const calculateBottlesUsed = () => {
+                // Calculate bottles used from orders
+                const bottleOrders = orders.filter(o => {
+                    const product = menu.find(p => p.id === o.productId);
+                    return product && product.category === 'Bottiglie';
+                });
+
+                const bottlesCount = {};
+                bottleOrders.forEach(order => {
+                    if (bottlesCount[order.productName]) {
+                        bottlesCount[order.productName] += order.quantity;
+                    } else {
+                        bottlesCount[order.productName] = order.quantity;
+                    }
+                });
+
+                return bottlesCount;
+            };
+
+            const finalizeInventory = async () => {
+                const bottlesUsed = calculateBottlesUsed();
+                
+                const newInventory = inventory.map(item => {
+                    const bottlesFromOrders = bottlesUsed[item.name] || 0;
+                    const totalUsed = bottlesFromOrders + (item.manualConsumption || 0);
+                    return {
+                        ...item,
+                        currentStock: item.initialStock - totalUsed,
+                        bottlesFromOrders,
+                        totalUsed
+                    };
+                });
+
+                await saveInventory(currentEvent.id, newInventory);
+                alert(`Inventario aggiornato!\n\nBottiglie consumate dai tavoli: ${Object.values(bottlesUsed).reduce((a,b) => a+b, 0)}`);
+            };
+
+            // STAFF MANAGEMENT
+            const saveStaff = async (eventId, newStaff) => {
+                try {
+                    await window.storage.set(`muse-staff-${eventId}`, JSON.stringify(newStaff), true);
+                    setStaff(newStaff);
+                } catch (error) {
+                    console.error('Error saving staff:', error);
+                }
+            };
+
+            const addStaffMember = async (member) => {
+                const newMember = {
+                    id: Date.now().toString(),
+                    ...member,
+                    status: 'off-duty',
+                    checkInTime: null,
+                    checkOutTime: null,
+                    createdAt: new Date().toISOString()
+                };
+                await saveStaff(currentEvent.id, [...staff, newMember]);
+            };
+
+            const toggleStaffStatus = async (staffId) => {
+                const now = new Date().toISOString();
+                const newStaff = staff.map(s => {
+                    if (s.id === staffId) {
+                        if (s.status === 'off-duty') {
+                            return { ...s, status: 'on-duty', checkInTime: now };
+                        } else {
+                            return { ...s, status: 'off-duty', checkOutTime: now };
+                        }
+                    }
+                    return s;
+                });
+                await saveStaff(currentEvent.id, newStaff);
+            };
+
+            const removeStaffMember = async (staffId) => {
+                const newStaff = staff.filter(s => s.id !== staffId);
+                await saveStaff(currentEvent.id, newStaff);
             };
 
             const createEvent = async (eventData) => {
@@ -785,38 +954,68 @@
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex gap-3">
+                            <div className="flex gap-2 flex-wrap">
                                 <button
                                     onClick={() => {
                                         setShowPrView(false);
                                         setShowOrdersView(false);
+                                        setShowInventoryView(false);
+                                        setShowStaffView(false);
                                     }}
-                                    className={`${!showPrView && !showOrdersView ? 'bg-purple-600' : 'bg-slate-700'} hover:bg-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all`}
+                                    className={`${!showPrView && !showOrdersView && !showInventoryView && !showStaffView ? 'bg-purple-600' : 'bg-slate-700'} hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm`}
                                 >
-                                    <MapPin size={20} />
+                                    <MapPin size={18} />
                                     Tavoli
                                 </button>
                                 <button
                                     onClick={() => {
                                         setShowPrView(true);
                                         setShowOrdersView(false);
+                                        setShowInventoryView(false);
+                                        setShowStaffView(false);
                                     }}
-                                    className={`${showPrView ? 'bg-cyan-600' : 'bg-slate-700'} hover:bg-cyan-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all`}
+                                    className={`${showPrView ? 'bg-cyan-600' : 'bg-slate-700'} hover:bg-cyan-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm`}
                                 >
-                                    <Users size={20} />
+                                    <Users size={18} />
                                     Liste PR
                                 </button>
                                 <button
                                     onClick={() => {
                                         setShowPrView(false);
                                         setShowOrdersView(true);
+                                        setShowInventoryView(false);
+                                        setShowStaffView(false);
                                     }}
-                                    className={`${showOrdersView ? 'bg-pink-600' : 'bg-slate-700'} hover:bg-pink-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all`}
+                                    className={`${showOrdersView ? 'bg-pink-600' : 'bg-slate-700'} hover:bg-pink-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm`}
                                 >
                                     🍾
                                     Ordini
                                 </button>
-                                {!showPrView && !showOrdersView && (editMode ? (
+                                <button
+                                    onClick={() => {
+                                        setShowPrView(false);
+                                        setShowOrdersView(false);
+                                        setShowInventoryView(true);
+                                        setShowStaffView(false);
+                                    }}
+                                    className={`${showInventoryView ? 'bg-amber-600' : 'bg-slate-700'} hover:bg-amber-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm`}
+                                >
+                                    <Package size={18} />
+                                    Magazzino
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowPrView(false);
+                                        setShowOrdersView(false);
+                                        setShowInventoryView(false);
+                                        setShowStaffView(true);
+                                    }}
+                                    className={`${showStaffView ? 'bg-emerald-600' : 'bg-slate-700'} hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm`}
+                                >
+                                    <UserCheck size={18} />
+                                    Staff
+                                </button>
+                                {!showPrView && !showOrdersView && !showInventoryView && !showStaffView && (editMode ? (
                                     <button
                                         onClick={() => setEditMode(false)}
                                         className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
@@ -833,7 +1032,7 @@
                                         Modifica Layout
                                     </button>
                                 ))}
-                                {editMode && !showPrView && !showOrdersView && (
+                                {editMode && !showPrView && !showOrdersView && !showInventoryView && !showStaffView && (
                                     <button
                                         onClick={addTable}
                                         className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
@@ -1032,6 +1231,432 @@
                                                 );
                                             })}
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : showInventoryView ? (
+                            /* INVENTORY VIEW */
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <div className="lg:col-span-2">
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6 mb-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                                                <Package size={24} />
+                                                Magazzino Serata
+                                            </h2>
+                                            <button
+                                                onClick={() => {
+                                                    const name = prompt('Nome prodotto (es: Vodka Belvedere):');
+                                                    if (!name) return;
+                                                    const category = prompt('Categoria (es: Vodka, Champagne, Gin):');
+                                                    if (!category) return;
+                                                    const quantity = parseInt(prompt('Quantità iniziale:'));
+                                                    if (isNaN(quantity)) return;
+                                                    const unitPrice = parseFloat(prompt('Prezzo unitario €:'));
+                                                    if (isNaN(unitPrice)) return;
+                                                    addInventoryItem({ name, category, quantity, unitPrice });
+                                                }}
+                                                className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm"
+                                            >
+                                                <Plus size={16} />
+                                                Aggiungi Prodotto
+                                            </button>
+                                        </div>
+
+                                        {/* Inventory Stats */}
+                                        <div className="grid grid-cols-3 gap-4 mb-6">
+                                            <div className="bg-amber-500/20 rounded-lg p-4 text-center">
+                                                <div className="text-amber-200 text-sm">Prodotti</div>
+                                                <div className="text-white font-bold text-2xl">{inventory.length}</div>
+                                            </div>
+                                            <div className="bg-green-500/20 rounded-lg p-4 text-center">
+                                                <div className="text-green-200 text-sm">Valore Stock</div>
+                                                <div className="text-white font-bold text-2xl">
+                                                    €{inventory.reduce((sum, i) => sum + (i.currentStock * i.unitPrice), 0).toFixed(0)}
+                                                </div>
+                                            </div>
+                                            <div className="bg-red-500/20 rounded-lg p-4 text-center">
+                                                <div className="text-red-200 text-sm">Sotto Scorta</div>
+                                                <div className="text-white font-bold text-2xl">
+                                                    {inventory.filter(i => i.currentStock <= 2).length}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Inventory List */}
+                                        <div className="space-y-3 max-h-[450px] overflow-y-auto">
+                                            {inventory.map(item => {
+                                                const bottlesUsed = calculateBottlesUsed();
+                                                const usedFromOrders = bottlesUsed[item.name] || 0;
+                                                const totalUsed = usedFromOrders + (item.manualConsumption || 0);
+                                                const remaining = item.initialStock - totalUsed;
+                                                const isLow = remaining <= 2;
+                                                
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        className={`rounded-lg p-4 border transition-all ${
+                                                            isLow 
+                                                                ? 'bg-red-500/10 border-red-400/40' 
+                                                                : 'bg-slate-900/50 border-purple-500/20'
+                                                        }`}
+                                                    >
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <div>
+                                                                <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                                                                    {item.name}
+                                                                    {isLow && <AlertTriangle size={16} className="text-red-400" />}
+                                                                </h3>
+                                                                <p className="text-purple-300 text-sm">{item.category} • €{item.unitPrice}/pz</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => removeInventoryItem(item.id)}
+                                                                className="text-red-400 hover:text-red-300"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                        
+                                                        <div className="grid grid-cols-4 gap-2 mb-3">
+                                                            <div className="bg-slate-800/50 rounded p-2 text-center">
+                                                                <div className="text-purple-300 text-xs">Iniziale</div>
+                                                                <div className="text-white font-bold">{item.initialStock}</div>
+                                                            </div>
+                                                            <div className="bg-pink-500/20 rounded p-2 text-center">
+                                                                <div className="text-pink-300 text-xs">Ordini</div>
+                                                                <div className="text-white font-bold">{usedFromOrders}</div>
+                                                            </div>
+                                                            <div className="bg-orange-500/20 rounded p-2 text-center">
+                                                                <div className="text-orange-300 text-xs">Manuale</div>
+                                                                <div className="text-white font-bold">{item.manualConsumption || 0}</div>
+                                                            </div>
+                                                            <div className={`rounded p-2 text-center ${isLow ? 'bg-red-500/30' : 'bg-green-500/20'}`}>
+                                                                <div className={`text-xs ${isLow ? 'text-red-300' : 'text-green-300'}`}>Rimaste</div>
+                                                                <div className="text-white font-bold">{remaining}</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Manual consumption controls */}
+                                                        <div className="flex items-center justify-between bg-slate-800/30 rounded-lg p-2">
+                                                            <span className="text-purple-300 text-sm">Consumo manuale:</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={() => updateInventoryItem(item.id, { 
+                                                                        manualConsumption: Math.max(0, (item.manualConsumption || 0) - 1) 
+                                                                    })}
+                                                                    className="bg-slate-700 hover:bg-slate-600 text-white w-8 h-8 rounded flex items-center justify-center"
+                                                                >
+                                                                    <Minus size={14} />
+                                                                </button>
+                                                                <span className="text-white font-bold w-8 text-center">{item.manualConsumption || 0}</span>
+                                                                <button
+                                                                    onClick={() => updateInventoryItem(item.id, { 
+                                                                        manualConsumption: (item.manualConsumption || 0) + 1 
+                                                                    })}
+                                                                    className="bg-slate-700 hover:bg-slate-600 text-white w-8 h-8 rounded flex items-center justify-center"
+                                                                >
+                                                                    <Plus size={14} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {inventory.length === 0 && (
+                                                <div className="text-center py-20 text-purple-300">
+                                                    <Package size={48} className="mx-auto mb-4 opacity-50" />
+                                                    <p>Nessun prodotto in magazzino</p>
+                                                    <p className="text-sm mt-2">Aggiungi prodotti per iniziare a tracciare</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Inventory Summary */}
+                                <div>
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6 mb-6">
+                                        <h2 className="text-xl font-bold text-white mb-4">Riepilogo per Categoria</h2>
+                                        <div className="space-y-3">
+                                            {[...new Set(inventory.map(i => i.category))].map(cat => {
+                                                const items = inventory.filter(i => i.category === cat);
+                                                const totalInitial = items.reduce((s, i) => s + i.initialStock, 0);
+                                                const bottlesUsed = calculateBottlesUsed();
+                                                const totalUsed = items.reduce((s, i) => {
+                                                    const fromOrders = bottlesUsed[i.name] || 0;
+                                                    return s + fromOrders + (i.manualConsumption || 0);
+                                                }, 0);
+                                                
+                                                return (
+                                                    <div key={cat} className="bg-slate-900/50 rounded-lg p-3">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-white font-medium">{cat}</span>
+                                                            <span className="text-purple-300">
+                                                                {totalInitial - totalUsed}/{totalInitial}
+                                                            </span>
+                                                        </div>
+                                                        <div className="mt-2 bg-slate-700 rounded-full h-2 overflow-hidden">
+                                                            <div 
+                                                                className="bg-gradient-to-r from-amber-500 to-orange-500 h-full transition-all"
+                                                                style={{ width: `${((totalInitial - totalUsed) / totalInitial) * 100}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                        <h2 className="text-xl font-bold text-white mb-4">Fine Serata</h2>
+                                        <p className="text-purple-300 text-sm mb-4">
+                                            Chiudi l'inventario per calcolare il consumo totale e aggiornare le giacenze.
+                                        </p>
+                                        <button
+                                            onClick={finalizeInventory}
+                                            className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white py-3 rounded-lg font-bold transition-all"
+                                        >
+                                            Chiudi Inventario Serata
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : showStaffView ? (
+                            /* STAFF VIEW */
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                <div className="lg:col-span-2">
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                                                <UserCheck size={24} />
+                                                Staff Serata
+                                            </h2>
+                                            <button
+                                                onClick={() => {
+                                                    const name = prompt('Nome:');
+                                                    if (!name) return;
+                                                    const role = prompt('Ruolo (es: Cameriere, Barista, Security, DJ):');
+                                                    if (!role) return;
+                                                    const phone = prompt('Telefono (opzionale):') || '';
+                                                    const hourlyRate = parseFloat(prompt('Paga oraria € (opzionale):') || '0');
+                                                    addStaffMember({ name, role, phone, hourlyRate });
+                                                }}
+                                                className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm"
+                                            >
+                                                <Plus size={16} />
+                                                Aggiungi Staff
+                                            </button>
+                                        </div>
+
+                                        {/* Staff Stats */}
+                                        <div className="grid grid-cols-3 gap-4 mb-6">
+                                            <div className="bg-emerald-500/20 rounded-lg p-4 text-center">
+                                                <div className="text-emerald-200 text-sm">Totale Staff</div>
+                                                <div className="text-white font-bold text-2xl">{staff.length}</div>
+                                            </div>
+                                            <div className="bg-green-500/20 rounded-lg p-4 text-center">
+                                                <div className="text-green-200 text-sm">In Servizio</div>
+                                                <div className="text-white font-bold text-2xl">
+                                                    {staff.filter(s => s.status === 'on-duty').length}
+                                                </div>
+                                            </div>
+                                            <div className="bg-slate-500/20 rounded-lg p-4 text-center">
+                                                <div className="text-slate-300 text-sm">Fuori Servizio</div>
+                                                <div className="text-white font-bold text-2xl">
+                                                    {staff.filter(s => s.status === 'off-duty').length}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Staff List */}
+                                        <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                                            {staff.map(member => {
+                                                const isOnDuty = member.status === 'on-duty';
+                                                let hoursWorked = 0;
+                                                if (member.checkInTime) {
+                                                    const checkIn = new Date(member.checkInTime);
+                                                    const checkOut = member.checkOutTime ? new Date(member.checkOutTime) : new Date();
+                                                    hoursWorked = (checkOut - checkIn) / (1000 * 60 * 60);
+                                                }
+
+                                                return (
+                                                    <div
+                                                        key={member.id}
+                                                        className={`rounded-lg p-4 border transition-all ${
+                                                            isOnDuty 
+                                                                ? 'bg-green-500/10 border-green-400/40' 
+                                                                : 'bg-slate-900/50 border-purple-500/20'
+                                                        }`}
+                                                    >
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <div className="flex items-start gap-3">
+                                                                <div className={`w-3 h-3 rounded-full mt-2 ${isOnDuty ? 'bg-green-400 animate-pulse' : 'bg-slate-500'}`} />
+                                                                <div>
+                                                                    <h3 className="text-white font-bold text-lg">{member.name}</h3>
+                                                                    <p className="text-purple-300 text-sm">{member.role}</p>
+                                                                    {member.phone && (
+                                                                        <p className="text-purple-400 text-xs flex items-center gap-1 mt-1">
+                                                                            <Phone size={12} />
+                                                                            {member.phone}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => removeStaffMember(member.id)}
+                                                                className="text-red-400 hover:text-red-300"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-3 gap-2 mb-3">
+                                                            <div className="bg-slate-800/50 rounded p-2 text-center">
+                                                                <div className="text-purple-300 text-xs flex items-center justify-center gap-1">
+                                                                    <Clock size={12} />
+                                                                    Check-in
+                                                                </div>
+                                                                <div className="text-white font-medium text-sm">
+                                                                    {member.checkInTime 
+                                                                        ? new Date(member.checkInTime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                                                                        : '-'
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-slate-800/50 rounded p-2 text-center">
+                                                                <div className="text-purple-300 text-xs flex items-center justify-center gap-1">
+                                                                    <Clock size={12} />
+                                                                    Check-out
+                                                                </div>
+                                                                <div className="text-white font-medium text-sm">
+                                                                    {member.checkOutTime 
+                                                                        ? new Date(member.checkOutTime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                                                                        : isOnDuty ? 'In corso' : '-'
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-slate-800/50 rounded p-2 text-center">
+                                                                <div className="text-purple-300 text-xs">Ore</div>
+                                                                <div className="text-white font-medium text-sm">
+                                                                    {hoursWorked > 0 ? hoursWorked.toFixed(1) + 'h' : '-'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={() => toggleStaffStatus(member.id)}
+                                                            className={`w-full py-2 rounded-lg font-bold transition-all ${
+                                                                isOnDuty
+                                                                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30'
+                                                                    : 'bg-green-500/20 hover:bg-green-500/30 text-green-300 border border-green-500/30'
+                                                            }`}
+                                                        >
+                                                            {isOnDuty ? '⏹ Check-out' : '▶ Check-in'}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                            {staff.length === 0 && (
+                                                <div className="text-center py-20 text-purple-300">
+                                                    <UserCheck size={48} className="mx-auto mb-4 opacity-50" />
+                                                    <p>Nessuno staff aggiunto</p>
+                                                    <p className="text-sm mt-2">Aggiungi il personale per la serata</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Staff Summary */}
+                                <div>
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6 mb-6">
+                                        <h2 className="text-xl font-bold text-white mb-4">Staff per Ruolo</h2>
+                                        <div className="space-y-3">
+                                            {[...new Set(staff.map(s => s.role))].map(role => {
+                                                const members = staff.filter(s => s.role === role);
+                                                const onDuty = members.filter(s => s.status === 'on-duty').length;
+                                                
+                                                return (
+                                                    <div key={role} className="bg-slate-900/50 rounded-lg p-3">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-white font-medium">{role}</span>
+                                                            <span className="text-purple-300">
+                                                                <span className="text-green-400">{onDuty}</span>/{members.length}
+                                                            </span>
+                                                        </div>
+                                                        <div className="mt-2 flex gap-1">
+                                                            {members.map(m => (
+                                                                <div
+                                                                    key={m.id}
+                                                                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                                                                        m.status === 'on-duty' 
+                                                                            ? 'bg-green-500 text-white' 
+                                                                            : 'bg-slate-600 text-slate-300'
+                                                                    }`}
+                                                                    title={m.name}
+                                                                >
+                                                                    {m.name.charAt(0)}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6 mb-6">
+                                        <h2 className="text-xl font-bold text-white mb-4">Costi Stimati</h2>
+                                        <div className="space-y-2">
+                                            {staff.filter(s => s.hourlyRate > 0).map(member => {
+                                                let hours = 0;
+                                                if (member.checkInTime) {
+                                                    const checkIn = new Date(member.checkInTime);
+                                                    const checkOut = member.checkOutTime ? new Date(member.checkOutTime) : new Date();
+                                                    hours = (checkOut - checkIn) / (1000 * 60 * 60);
+                                                }
+                                                const cost = hours * member.hourlyRate;
+                                                
+                                                return (
+                                                    <div key={member.id} className="flex justify-between text-sm">
+                                                        <span className="text-purple-300">{member.name}</span>
+                                                        <span className="text-white">
+                                                            {hours.toFixed(1)}h × €{member.hourlyRate} = <span className="text-yellow-400">€{cost.toFixed(2)}</span>
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                            <div className="border-t border-purple-500/30 pt-2 mt-2 flex justify-between font-bold">
+                                                <span className="text-white">Totale</span>
+                                                <span className="text-yellow-400">
+                                                    €{staff.reduce((sum, m) => {
+                                                        if (!m.hourlyRate || !m.checkInTime) return sum;
+                                                        const checkIn = new Date(m.checkInTime);
+                                                        const checkOut = m.checkOutTime ? new Date(m.checkOutTime) : new Date();
+                                                        const hours = (checkOut - checkIn) / (1000 * 60 * 60);
+                                                        return sum + (hours * m.hourlyRate);
+                                                    }, 0).toFixed(2)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                        <h2 className="text-xl font-bold text-white mb-4">Link App Camerieri</h2>
+                                        <p className="text-purple-300 text-sm mb-4">
+                                            Condividi questo link con i camerieri per vedere ordini e chiamate in tempo reale.
+                                        </p>
+                                        <button
+                                            onClick={() => {
+                                                const baseUrl = window.location.origin + window.location.pathname.replace(/gestione-tavoli\.html.*$/, '');
+                                                const link = `${baseUrl}waiter-app.html?event=${currentEvent.id}`;
+                                                navigator.clipboard.writeText(link);
+                                                alert(`Link copiato!\n\n${link}\n\nInvialo ai camerieri via WhatsApp.`);
+                                            }}
+                                            className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
+                                        >
+                                            🔗 Copia Link Camerieri
+                                        </button>
                                     </div>
                                 </div>
                             </div>
