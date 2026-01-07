@@ -6,10 +6,17 @@
     <title>@_muse.in_ - Cameriere</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+        @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+        .call-pulse { position: relative; }
+        .call-pulse::before { content: ''; position: absolute; inset: -8px; border-radius: 12px; border: 2px solid #f97316; animation: pulse-ring 1.5s infinite; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
     <script>
         firebase.initializeApp({
             apiKey: "AIzaSyA-m6tX87TZtqTDg2kuE04zDvxkJ_vH2Yg",
@@ -20,20 +27,10 @@
             appId: "1:299126578946:web:2609823671a0eed056ac1b"
         });
         const db = firebase.firestore();
-    </script>
-    <style>
-        @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
-        .call-pulse::before { content: ''; position: absolute; inset: -8px; border-radius: 12px; border: 2px solid #f97316; animation: pulse-ring 1.5s infinite; }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
-    <script type="text/babel">
         const { useState, useEffect, useRef } = React;
-        const Bell = ({ size = 24 }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>;
-        const Check = ({ size = 24 }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>;
+        const h = React.createElement;
 
-        const App = () => {
+        function App() {
             const [event, setEvent] = useState(null);
             const [tables, setTables] = useState([]);
             const [orders, setOrders] = useState([]);
@@ -55,118 +52,87 @@
                         if (!eventDoc.exists) { setError('Evento non trovato.'); setLoading(false); return; }
                         setEvent({ id: eventDoc.id, ...eventDoc.data() });
 
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('tables').onSnapshot(s => setTables(s.docs.map(d => ({ id: d.id, ...d.data() })))));
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('bookings').onSnapshot(s => setBookings(s.docs.map(d => ({ id: d.id, ...d.data() })))));
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('orders').onSnapshot(s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })))));
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('waiterCalls').where('status', '==', 'pending').onSnapshot(s => setCalls(s.docs.map(d => ({ id: d.id, ...d.data() })))));
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('tables').onSnapshot(s => setTables(s.docs.map(d => ({id:d.id,...d.data()})))));
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('bookings').onSnapshot(s => setBookings(s.docs.map(d => ({id:d.id,...d.data()})))));
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('orders').onSnapshot(s => setOrders(s.docs.map(d => ({id:d.id,...d.data()})))));
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('waiterCalls').where('status','==','pending').onSnapshot(s => setCalls(s.docs.map(d => ({id:d.id,...d.data()})))));
                         setLoading(false);
-                    } catch (e) { setError('Errore caricamento.'); setLoading(false); }
+                    } catch(e) { setError('Errore caricamento.'); setLoading(false); }
                 })();
                 return () => unsubs.current.forEach(u => u());
             }, []);
 
-            const clearCall = async (callId) => {
+            const clearCall = async (cid) => {
                 const params = new URLSearchParams(window.location.search);
-                const eventId = params.get('event');
-                await db.collection('events').doc(eventId).collection('waiterCalls').doc(callId).update({ status: 'completed', completedAt: new Date().toISOString() });
+                await db.collection('events').doc(params.get('event')).collection('waiterCalls').doc(cid).update({status:'completed',completedAt:new Date().toISOString()});
             };
 
-            const timeSince = (date) => {
-                const diff = Math.floor((new Date() - new Date(date)) / 1000 / 60);
-                if (diff < 1) return 'Ora';
-                if (diff < 60) return `${diff}m fa`;
-                return `${Math.floor(diff/60)}h ${diff%60}m`;
-            };
+            const timeSince = (date) => { const d = Math.floor((new Date()-new Date(date))/1000/60); return d<1?'Ora':d<60?d+'m fa':Math.floor(d/60)+'h '+d%60+'m'; };
 
-            if (loading) return <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center"><div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500"></div></div>;
-            if (error) return <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4"><div className="bg-red-500/20 border border-red-500/40 rounded-xl p-8 text-center"><div className="text-6xl mb-4">⚠️</div><p className="text-red-300">{error}</p></div></div>;
+            if (loading) return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center'}, h('div', {className: 'animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500'}));
+            if (error) return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4'}, h('div', {className: 'bg-red-500/20 border border-red-500/40 rounded-xl p-8 text-center'}, h('div', {className: 'text-6xl mb-4'}, '⚠️'), h('p', {className: 'text-red-300'}, error)));
 
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-                    <header className="sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-purple-500/30 px-4 py-3 z-50">
-                        <div className="flex justify-between items-center mb-3">
-                            <div><h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400">🍷 Cameriere</h1><p className="text-purple-300 text-xs">{event?.name}</p></div>
-                            <div className="text-purple-400 text-xs">Real-time ✓</div>
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setTab('calls')} className={`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${tab === 'calls' ? 'bg-orange-500 text-white' : 'bg-slate-800 text-purple-300'}`}>
-                                <Bell size={16}/> Chiamate {calls.length > 0 && <span className="bg-white text-orange-600 text-xs px-2 rounded-full">{calls.length}</span>}
-                            </button>
-                            <button onClick={() => setTab('orders')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${tab === 'orders' ? 'bg-pink-500 text-white' : 'bg-slate-800 text-purple-300'}`}>🍾 Ordini</button>
-                            <button onClick={() => setTab('tables')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${tab === 'tables' ? 'bg-purple-500 text-white' : 'bg-slate-800 text-purple-300'}`}>🪑 Tavoli</button>
-                        </div>
-                    </header>
-
-                    <main className="p-4 pb-24">
-                        {tab === 'calls' && (
-                            <div className="space-y-3">
-                                {calls.length === 0 ? (
-                                    <div className="text-center py-16"><Bell size={64} className="mx-auto mb-4 text-purple-500/50"/><p className="text-white font-bold">Nessuna chiamata</p><p className="text-purple-300 text-sm">Le chiamate appariranno qui in tempo reale</p></div>
-                                ) : calls.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)).map(call => (
-                                    <div key={call.id} className="relative bg-orange-500/20 border-2 border-orange-400 rounded-xl p-4 call-pulse">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <div><span className="text-3xl font-black text-white">Tavolo {call.tableNumber}</span><p className="text-orange-200 text-sm mt-1">{timeSince(call.createdAt)}</p></div>
-                                            <Bell size={24} className="text-orange-400 animate-bounce"/>
-                                        </div>
-                                        <button onClick={() => clearCall(call.id)} className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-bold text-lg flex items-center justify-center gap-2"><Check size={24}/> Servito</button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {tab === 'orders' && (
-                            <div className="space-y-3">
-                                <h2 className="text-white font-bold">Ordini Recenti</h2>
-                                {orders.length === 0 ? (
-                                    <div className="text-center py-16"><p className="text-purple-300">Nessun ordine</p></div>
-                                ) : [...orders].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 30).map(order => {
-                                    const table = tables.find(t => t.id === order.tableId);
-                                    return (
-                                        <div key={order.id} className="bg-slate-800/50 border border-purple-500/30 rounded-xl p-4">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div><span className="text-white font-bold">Tavolo {table?.number || '?'}</span><p className="text-purple-300 text-xs">{timeSince(order.createdAt)}</p></div>
-                                                <span className="text-yellow-400 font-bold">€{order.total?.toFixed(2)}</span>
-                                            </div>
-                                            <div className="bg-slate-900/50 rounded-lg p-2 text-white">{order.quantity}x {order.productName}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {tab === 'tables' && (
-                            <div className="space-y-3">
-                                {tables.sort((a,b) => a.number - b.number).map(table => {
-                                    const booking = bookings.find(b => b.tableId === table.id);
-                                    const tableOrders = orders.filter(o => o.tableId === table.id);
-                                    const total = tableOrders.reduce((s, o) => s + o.total, 0);
-                                    const hasCall = calls.some(c => c.tableId === table.id);
-                                    return (
-                                        <div key={table.id} className={`rounded-xl p-4 border-2 ${hasCall ? 'bg-orange-500/20 border-orange-400' : booking ? 'bg-green-500/10 border-green-500/40' : 'bg-slate-800/50 border-purple-500/30'}`}>
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <span className="text-white font-bold text-xl">Tavolo {table.number}</span>
-                                                    {hasCall && <Bell size={18} className="inline ml-2 text-orange-400 animate-bounce"/>}
-                                                    {booking ? <p className="text-green-300 text-sm">👤 {booking.guestName}</p> : <p className="text-purple-400 text-sm">Libero • {table.capacity} posti</p>}
-                                                </div>
-                                                {total > 0 && <div className="text-right"><div className="text-yellow-400 font-bold">€{total.toFixed(2)}</div><div className="text-purple-300 text-xs">{tableOrders.length} ordini</div></div>}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </main>
-
-                    {calls.length > 0 && tab !== 'calls' && (
-                        <button onClick={() => setTab('calls')} className="fixed bottom-6 right-6 bg-orange-500 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
-                            <Bell size={24}/> <span className="font-bold">{calls.length}</span>
-                        </button>
-                    )}
-                </div>
+            return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'},
+                h('header', {className: 'sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-purple-500/30 px-4 py-3 z-50'},
+                    h('div', {className: 'flex justify-between items-center mb-3'},
+                        h('div', {}, h('h1', {className: 'text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400'}, '🍷 Cameriere'), h('p', {className: 'text-purple-300 text-xs'}, event?.name)),
+                        h('div', {className: 'text-green-400 text-xs'}, '● Real-time')
+                    ),
+                    h('div', {className: 'flex gap-2'},
+                        h('button', {onClick:()=>setTab('calls'), className:`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${tab==='calls'?'bg-orange-500 text-white':'bg-slate-800 text-purple-300'}`}, '🔔 Chiamate', calls.length>0 && h('span', {className:'bg-white text-orange-600 text-xs px-2 rounded-full'}, calls.length)),
+                        h('button', {onClick:()=>setTab('orders'), className:`flex-1 py-2 rounded-lg font-bold text-sm ${tab==='orders'?'bg-pink-500 text-white':'bg-slate-800 text-purple-300'}`}, '🍾 Ordini'),
+                        h('button', {onClick:()=>setTab('tables'), className:`flex-1 py-2 rounded-lg font-bold text-sm ${tab==='tables'?'bg-purple-500 text-white':'bg-slate-800 text-purple-300'}`}, '🪑 Tavoli')
+                    )
+                ),
+                h('main', {className: 'p-4 pb-24'},
+                    tab === 'calls' && h('div', {className: 'space-y-3'},
+                        calls.length === 0 ? h('div', {className: 'text-center py-16'}, h('div', {className: 'text-6xl mb-4'}, '🔔'), h('p', {className: 'text-white font-bold'}, 'Nessuna chiamata'), h('p', {className: 'text-purple-300 text-sm'}, 'Le chiamate appariranno qui'))
+                        : calls.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).map(call =>
+                            h('div', {key: call.id, className: 'call-pulse bg-orange-500/20 border-2 border-orange-400 rounded-xl p-4'},
+                                h('div', {className: 'flex justify-between items-start mb-3'},
+                                    h('div', {}, h('span', {className: 'text-3xl font-black text-white'}, 'Tavolo ', call.tableNumber), h('p', {className: 'text-orange-200 text-sm mt-1'}, timeSince(call.createdAt))),
+                                    h('span', {className: 'text-2xl'}, '🔔')
+                                ),
+                                h('button', {onClick: ()=>clearCall(call.id), className: 'w-full bg-green-500 text-white py-3 rounded-lg font-bold text-lg'}, '✓ Servito')
+                            )
+                        )
+                    ),
+                    tab === 'orders' && h('div', {className: 'space-y-3'},
+                        h('h2', {className: 'text-white font-bold'}, 'Ordini Recenti'),
+                        orders.length === 0 ? h('p', {className: 'text-purple-300 text-center py-16'}, 'Nessun ordine')
+                        : [...orders].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,30).map(order => {
+                            const table = tables.find(t => t.id === order.tableId);
+                            return h('div', {key: order.id, className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-4'},
+                                h('div', {className: 'flex justify-between items-start mb-2'},
+                                    h('div', {}, h('span', {className: 'text-white font-bold'}, 'Tavolo ', table?.number||'?'), h('p', {className: 'text-purple-300 text-xs'}, timeSince(order.createdAt))),
+                                    h('span', {className: 'text-yellow-400 font-bold'}, '€', order.total?.toFixed(2))
+                                ),
+                                h('div', {className: 'bg-slate-900/50 rounded-lg p-2 text-white'}, order.quantity, 'x ', order.productName)
+                            );
+                        })
+                    ),
+                    tab === 'tables' && h('div', {className: 'space-y-3'},
+                        tables.sort((a,b)=>a.number-b.number).map(table => {
+                            const booking = bookings.find(b => b.tableId === table.id);
+                            const tableOrders = orders.filter(o => o.tableId === table.id);
+                            const total = tableOrders.reduce((s,o) => s+(o.total||0), 0);
+                            const hasCall = calls.some(c => c.tableId === table.id);
+                            return h('div', {key: table.id, className: `rounded-xl p-4 border-2 ${hasCall?'bg-orange-500/20 border-orange-400':booking?'bg-green-500/10 border-green-500/40':'bg-slate-800/50 border-purple-500/30'}`},
+                                h('div', {className: 'flex justify-between items-start'},
+                                    h('div', {},
+                                        h('span', {className: 'text-white font-bold text-xl'}, 'Tavolo ', table.number, hasCall && ' 🔔'),
+                                        booking ? h('p', {className: 'text-green-300 text-sm'}, '👤 ', booking.guestName) : h('p', {className: 'text-purple-400 text-sm'}, 'Libero • ', table.capacity, ' posti')
+                                    ),
+                                    total > 0 && h('div', {className: 'text-right'}, h('div', {className: 'text-yellow-400 font-bold'}, '€', total.toFixed(2)), h('div', {className: 'text-purple-300 text-xs'}, tableOrders.length, ' ordini'))
+                                )
+                            );
+                        })
+                    )
+                ),
+                calls.length > 0 && tab !== 'calls' && h('button', {onClick:()=>setTab('calls'), className: 'fixed bottom-6 right-6 bg-orange-500 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-2 animate-bounce'}, '🔔 ', calls.length)
             );
-        };
-        ReactDOM.render(<App />, document.getElementById('root'));
+        }
+        ReactDOM.render(h(App), document.getElementById('root'));
     </script>
 </body>
 </html>
