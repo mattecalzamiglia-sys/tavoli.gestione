@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@_muse.in_ - App Camerieri</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(100, 100, 100, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(168, 85, 247, 0.5);
+            border-radius: 4px;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        .call-pulse::before {
+            content: '';
+            position: absolute;
+            inset: -8px;
+            border-radius: 12px;
+            border: 2px solid #f97316;
+            animation: pulse-ring 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback } = React;
+
+        // Icons
+        const Bell = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+        );
+
+        const Check = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+            </svg>
+        );
+
+        const Clock = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+        );
+
+        const RefreshCw = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+            </svg>
+        );
+
+        const Wine = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 22h8"/><path d="M7 10h10"/><path d="M12 15v7"/><path d="M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z"/>
+            </svg>
+        );
+
+        // Storage wrapper
+        const storage = {
+            async get(key, shared = false) {
+                try {
+                    const value = localStorage.getItem(key);
+                    return value ? { key, value, shared } : null;
+                } catch (error) {
+                    return null;
+                }
+            },
+            async set(key, value, shared = false) {
+                try {
+                    localStorage.setItem(key, value);
+                    return { key, value, shared };
+                } catch (error) {
+                    return null;
+                }
+            }
+        };
+
+        window.storage = storage;
+
+        const WaiterApp = () => {
+            const [event, setEvent] = useState(null);
+            const [tables, setTables] = useState([]);
+            const [orders, setOrders] = useState([]);
+            const [waiterCalls, setWaiterCalls] = useState([]);
+            const [bookings, setBookings] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [activeTab, setActiveTab] = useState('calls'); // 'calls' | 'orders' | 'tables'
+            const [refreshing, setRefreshing] = useState(false);
+            const [lastUpdate, setLastUpdate] = useState(new Date());
+
+            const loadData = useCallback(async () => {
+                const params = new URLSearchParams(window.location.search);
+                const eventId = params.get('event');
+
+                if (!eventId) {
+                    setError('Link non valido. Manca il parametro evento.');
+                    setLoading(false);
+                    return;
+                }
+
+                try {
+                    // Load event
+                    const eventsResult = await window.storage.get('muse-events');
+                    if (eventsResult) {
+                        const events = JSON.parse(eventsResult.value);
+                        const foundEvent = events.find(e => e.id === eventId);
+                        if (foundEvent) {
+                            setEvent(foundEvent);
+                        } else {
+                            setError('Evento non trovato.');
+                            setLoading(false);
+                            return;
+                        }
+                    }
+
+                    // Load tables
+                    const tablesResult = await window.storage.get(`muse-tables-${eventId}`);
+                    if (tablesResult) {
+                        setTables(JSON.parse(tablesResult.value));
+                    }
+
+                    // Load bookings
+                    const bookingsResult = await window.storage.get(`muse-bookings-${eventId}`);
+                    if (bookingsResult) {
+                        setBookings(JSON.parse(bookingsResult.value));
+                    }
+
+                    // Load orders
+                    const ordersResult = await window.storage.get(`muse-orders-${eventId}`, true);
+                    if (ordersResult) {
+                        setOrders(JSON.parse(ordersResult.value));
+                    }
+
+                    // Load waiter calls
+                    const callsResult = await window.storage.get(`muse-waiter-calls-${eventId}`, true);
+                    if (callsResult) {
+                        const allCalls = JSON.parse(callsResult.value);
+                        // Only show pending calls from last 2 hours
+                        const recentCalls = allCalls.filter(c => {
+                            const callTime = new Date(c.createdAt);
+                            const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+                            return c.status === 'pending' && callTime > twoHoursAgo;
+                        });
+                        setWaiterCalls(recentCalls);
+                    }
+
+                    setLastUpdate(new Date());
+                } catch (err) {
+                    console.error('Error loading data:', err);
+                    setError('Errore nel caricamento dati.');
+                }
+
+                setLoading(false);
+                setRefreshing(false);
+            }, []);
+
+            useEffect(() => {
+                loadData();
+                // Auto-refresh every 10 seconds
+                const interval = setInterval(loadData, 10000);
+                return () => clearInterval(interval);
+            }, [loadData]);
+
+            const handleRefresh = () => {
+                setRefreshing(true);
+                loadData();
+            };
+
+            const clearCall = async (callId) => {
+                const params = new URLSearchParams(window.location.search);
+                const eventId = params.get('event');
+
+                try {
+                    const callsResult = await window.storage.get(`muse-waiter-calls-${eventId}`, true);
+                    if (callsResult) {
+                        let allCalls = JSON.parse(callsResult.value);
+                        allCalls = allCalls.map(c =>
+                            c.id === callId ? { ...c, status: 'completed', completedAt: new Date().toISOString() } : c
+                        );
+                        await window.storage.set(`muse-waiter-calls-${eventId}`, JSON.stringify(allCalls), true);
+                        setWaiterCalls(waiterCalls.filter(c => c.id !== callId));
+                    }
+                } catch (err) {
+                    console.error('Error clearing call:', err);
+                }
+            };
+
+            const getTableBooking = (tableId) => {
+                return bookings.find(b => b.tableId === tableId);
+            };
+
+            const getTableOrders = (tableId) => {
+                return orders.filter(o => o.tableId === tableId);
+            };
+
+            const getTableTotal = (tableId) => {
+                return orders
+                    .filter(o => o.tableId === tableId)
+                    .reduce((sum, o) => sum + o.total, 0);
+            };
+
+            const getTimeSince = (dateString) => {
+                const date = new Date(dateString);
+                const now = new Date();
+                const diff = Math.floor((now - date) / 1000 / 60);
+                if (diff < 1) return 'Ora';
+                if (diff < 60) return `${diff} min fa`;
+                return `${Math.floor(diff / 60)}h ${diff % 60}m fa`;
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500 mx-auto mb-4"></div>
+                            <p className="text-purple-300">Caricamento...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (error) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
+                        <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-8 text-center max-w-md">
+                            <div className="text-red-400 text-6xl mb-4">⚠️</div>
+                            <h2 className="text-xl font-bold text-white mb-2">Errore</h2>
+                            <p className="text-red-300">{error}</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+                    {/* Header */}
+                    <header className="sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-purple-500/30 px-4 py-3 z-50">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400">
+                                    🍷 Cameriere
+                                </h1>
+                                <p className="text-purple-300 text-xs">{event?.name}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-purple-400 text-xs">
+                                    {lastUpdate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <button
+                                    onClick={handleRefresh}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-lg"
+                                    disabled={refreshing}
+                                >
+                                    <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div className="flex gap-2 mt-3">
+                            <button
+                                onClick={() => setActiveTab('calls')}
+                                className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                                    activeTab === 'calls'
+                                        ? 'bg-orange-500 text-white'
+                                        : 'bg-slate-800 text-purple-300'
+                                }`}
+                            >
+                                <Bell size={16} />
+                                Chiamate
+                                {waiterCalls.length > 0 && (
+                                    <span className="bg-white text-orange-600 text-xs px-2 py-0.5 rounded-full font-bold">
+                                        {waiterCalls.length}
+                                    </span>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('orders')}
+                                className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                                    activeTab === 'orders'
+                                        ? 'bg-pink-500 text-white'
+                                        : 'bg-slate-800 text-purple-300'
+                                }`}
+                            >
+                                <Wine size={16} />
+                                Ordini
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('tables')}
+                                className={`flex-1 py-2 px-3 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                                    activeTab === 'tables'
+                                        ? 'bg-purple-500 text-white'
+                                        : 'bg-slate-800 text-purple-300'
+                                }`}
+                            >
+                                🪑
+                                Tavoli
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Content */}
+                    <main className="p-4 pb-24">
+                        {/* CALLS TAB */}
+                        {activeTab === 'calls' && (
+                            <div className="space-y-3">
+                                {waiterCalls.length === 0 ? (
+                                    <div className="text-center py-16">
+                                        <Bell size={64} className="mx-auto mb-4 text-purple-500/50" />
+                                        <h3 className="text-white font-bold text-lg mb-2">Nessuna chiamata</h3>
+                                        <p className="text-purple-300 text-sm">Le chiamate dai tavoli appariranno qui</p>
+                                    </div>
+                                ) : (
+                                    waiterCalls
+                                        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+                                        .map(call => {
+                                            const booking = getTableBooking(call.tableId);
+                                            return (
+                                                <div
+                                                    key={call.id}
+                                                    className="relative bg-orange-500/20 border-2 border-orange-400 rounded-xl p-4 call-pulse"
+                                                >
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-3xl font-black text-white">
+                                                                    Tavolo {call.tableNumber}
+                                                                </span>
+                                                                <Bell size={24} className="text-orange-400 animate-bounce" />
+                                                            </div>
+                                                            {booking && (
+                                                                <p className="text-orange-200 text-sm mt-1">
+                                                                    👤 {booking.guestName} ({booking.guestCount} persone)
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-orange-300 text-sm flex items-center gap-1">
+                                                                <Clock size={14} />
+                                                                {getTimeSince(call.createdAt)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => clearCall(call.id)}
+                                                        className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-bold text-lg flex items-center justify-center gap-2 transition-all"
+                                                    >
+                                                        <Check size={24} />
+                                                        Servito
+                                                    </button>
+                                                </div>
+                                            );
+                                        })
+                                )}
+                            </div>
+                        )}
+
+                        {/* ORDERS TAB */}
+                        {activeTab === 'orders' && (
+                            <div className="space-y-4">
+                                {/* Recent orders */}
+                                <h2 className="text-white font-bold text-lg">Ordini Recenti</h2>
+                                {orders.length === 0 ? (
+                                    <div className="text-center py-16">
+                                        <Wine size={64} className="mx-auto mb-4 text-purple-500/50" />
+                                        <h3 className="text-white font-bold text-lg mb-2">Nessun ordine</h3>
+                                        <p className="text-purple-300 text-sm">Gli ordini dai tavoli appariranno qui</p>
+                                    </div>
+                                ) : (
+                                    [...orders]
+                                        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                                        .slice(0, 20)
+                                        .map(order => {
+                                            const table = tables.find(t => t.id === order.tableId);
+                                            return (
+                                                <div
+                                                    key={order.id}
+                                                    className="bg-slate-800/50 border border-purple-500/30 rounded-xl p-4"
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div>
+                                                            <span className="text-white font-bold text-lg">
+                                                                Tavolo {table?.number || '?'}
+                                                            </span>
+                                                            <p className="text-purple-300 text-xs">
+                                                                {getTimeSince(order.createdAt)}
+                                                            </p>
+                                                        </div>
+                                                        <span className="text-yellow-400 font-bold">
+                                                            €{order.total.toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="bg-slate-900/50 rounded-lg p-3">
+                                                        <span className="text-white">
+                                                            {order.quantity}x {order.productName}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                )}
+                            </div>
+                        )}
+
+                        {/* TABLES TAB */}
+                        {activeTab === 'tables' && (
+                            <div className="space-y-3">
+                                {tables
+                                    .sort((a, b) => a.number - b.number)
+                                    .map(table => {
+                                        const booking = getTableBooking(table.id);
+                                        const tableOrders = getTableOrders(table.id);
+                                        const total = getTableTotal(table.id);
+                                        const hasCall = waiterCalls.some(c => c.tableId === table.id);
+
+                                        return (
+                                            <div
+                                                key={table.id}
+                                                className={`rounded-xl p-4 border-2 transition-all ${
+                                                    hasCall
+                                                        ? 'bg-orange-500/20 border-orange-400'
+                                                        : booking
+                                                        ? 'bg-green-500/10 border-green-500/40'
+                                                        : 'bg-slate-800/50 border-purple-500/30'
+                                                }`}
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-white font-bold text-xl">
+                                                                Tavolo {table.number}
+                                                            </span>
+                                                            {hasCall && <Bell size={18} className="text-orange-400 animate-bounce" />}
+                                                        </div>
+                                                        {booking ? (
+                                                            <p className="text-green-300 text-sm">
+                                                                👤 {booking.guestName} • {booking.guestCount}/{table.capacity}
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-purple-400 text-sm">
+                                                                Libero • {table.capacity} posti
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    {total > 0 && (
+                                                        <div className="text-right">
+                                                            <div className="text-yellow-400 font-bold">
+                                                                €{total.toFixed(2)}
+                                                            </div>
+                                                            <div className="text-purple-300 text-xs">
+                                                                {tableOrders.length} ordini
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {tableOrders.length > 0 && (
+                                                    <div className="bg-slate-900/50 rounded-lg p-2 mt-2">
+                                                        <div className="text-purple-300 text-xs space-y-1">
+                                                            {tableOrders.slice(-3).map(o => (
+                                                                <div key={o.id} className="flex justify-between">
+                                                                    <span>{o.quantity}x {o.productName}</span>
+                                                                    <span>€{o.total.toFixed(2)}</span>
+                                                                </div>
+                                                            ))}
+                                                            {tableOrders.length > 3 && (
+                                                                <div className="text-purple-400 text-center">
+                                                                    +{tableOrders.length - 3} altri ordini
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Floating notification for calls */}
+                    {waiterCalls.length > 0 && activeTab !== 'calls' && (
+                        <button
+                            onClick={() => setActiveTab('calls')}
+                            className="fixed bottom-6 right-6 bg-orange-500 text-white px-6 py-4 rounded-full shadow-lg shadow-orange-500/30 flex items-center gap-2 animate-bounce"
+                        >
+                            <Bell size={24} />
+                            <span className="font-bold">{waiterCalls.length} chiamate</span>
+                        </button>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<WaiterApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
