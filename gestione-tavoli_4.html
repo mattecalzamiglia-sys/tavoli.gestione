@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@_muse.in_ - Gestione Tavoli</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(100, 100, 100, 0.1);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(168, 85, 247, 0.5);
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(168, 85, 247, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Lucide Icons components
+        const Plus = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M5 12h14"/><path d="M12 5v14"/>
+            </svg>
+        );
+
+        const Edit3 = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+            </svg>
+        );
+
+        const Save = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+            </svg>
+        );
+
+        const X = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
+        );
+
+        const Users = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+        );
+
+        const Calendar = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>
+            </svg>
+        );
+
+        const MapPin = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+        );
+
+        const ChevronLeft = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m15 18-6-6 6-6"/>
+            </svg>
+        );
+
+        const Trash2 = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>
+            </svg>
+        );
+
+        const Phone = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+        );
+
+        const StickyNote = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/>
+            </svg>
+        );
+
+        const Upload = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>
+            </svg>
+        );
+
+        // Simple localStorage wrapper for compatibility
+        const storage = {
+            async get(key) {
+                try {
+                    const value = localStorage.getItem(key);
+                    return value ? { key, value } : null;
+                } catch (error) {
+                    console.error('Storage get error:', error);
+                    return null;
+                }
+            },
+            async set(key, value) {
+                try {
+                    localStorage.setItem(key, value);
+                    return { key, value };
+                } catch (error) {
+                    console.error('Storage set error:', error);
+                    return null;
+                }
+            },
+            async delete(key) {
+                try {
+                    localStorage.removeItem(key);
+                    return { key, deleted: true };
+                } catch (error) {
+                    console.error('Storage delete error:', error);
+                    return null;
+                }
+            }
+        };
+
+        window.storage = storage;
+
+        const EventTablesManager = () => {
+            const [events, setEvents] = useState([]);
+            const [currentEvent, setCurrentEvent] = useState(null);
+            const [tables, setTables] = useState([]);
+            const [bookings, setBookings] = useState([]);
+            const [prs, setPrs] = useState([]);
+            const [guestLists, setGuestLists] = useState([]);
+            const [editMode, setEditMode] = useState(false);
+            const [showNewEvent, setShowNewEvent] = useState(false);
+            const [showNewPr, setShowNewPr] = useState(false);
+            const [showPrView, setShowPrView] = useState(false);
+            const [showImportGuests, setShowImportGuests] = useState(false);
+            const [selectedPr, setSelectedPr] = useState(null);
+            const [selectedTable, setSelectedTable] = useState(null);
+            const [draggedTable, setDraggedTable] = useState(null);
+            const [resizingTable, setResizingTable] = useState(null);
+            const [resizeStart, setResizeStart] = useState(null);
+            const [editingTable, setEditingTable] = useState(null);
+            const [loading, setLoading] = useState(true);
+            
+            const floorPlanRef = useRef(null);
+
+            useEffect(() => {
+                loadEvents();
+            }, []);
+
+            useEffect(() => {
+                if (currentEvent) {
+                    loadTablesAndBookings(currentEvent.id);
+                }
+            }, [currentEvent]);
+
+            const loadEvents = async () => {
+                try {
+                    const result = await window.storage.get('muse-events');
+                    if (result) {
+                        const eventsList = JSON.parse(result.value);
+                        setEvents(eventsList);
+                    }
+                } catch (error) {
+                    console.log('No events found, starting fresh');
+                }
+                setLoading(false);
+            };
+
+            const loadTablesAndBookings = async (eventId) => {
+                try {
+                    const tablesResult = await window.storage.get(`muse-tables-${eventId}`);
+                    if (tablesResult) {
+                        const loadedTables = JSON.parse(tablesResult.value);
+                        // Add default width/height to old tables that don't have them
+                        const updatedTables = loadedTables.map(t => ({
+                            ...t,
+                            width: t.width || 80,
+                            height: t.height || 80
+                        }));
+                        setTables(updatedTables);
+                    } else {
+                        setTables([]);
+                    }
+                } catch (error) {
+                    setTables([]);
+                }
+
+                try {
+                    const bookingsResult = await window.storage.get(`muse-bookings-${eventId}`);
+                    if (bookingsResult) {
+                        setBookings(JSON.parse(bookingsResult.value));
+                    } else {
+                        setBookings([]);
+                    }
+                } catch (error) {
+                    setBookings([]);
+                }
+
+                try {
+                    const prsResult = await window.storage.get(`muse-prs-${eventId}`, true);
+                    if (prsResult) {
+                        setPrs(JSON.parse(prsResult.value));
+                    } else {
+                        setPrs([]);
+                    }
+                } catch (error) {
+                    setPrs([]);
+                }
+
+                try {
+                    const guestListsResult = await window.storage.get(`muse-guestlists-${eventId}`, true);
+                    if (guestListsResult) {
+                        setGuestLists(JSON.parse(guestListsResult.value));
+                    } else {
+                        setGuestLists([]);
+                    }
+                } catch (error) {
+                    setGuestLists([]);
+                }
+            };
+
+            const saveEvents = async (newEvents) => {
+                try {
+                    await window.storage.set('muse-events', JSON.stringify(newEvents));
+                    setEvents(newEvents);
+                } catch (error) {
+                    console.error('Error saving events:', error);
+                }
+            };
+
+            const saveTables = async (eventId, newTables) => {
+                try {
+                    await window.storage.set(`muse-tables-${eventId}`, JSON.stringify(newTables));
+                    setTables(newTables);
+                } catch (error) {
+                    console.error('Error saving tables:', error);
+                }
+            };
+
+            const saveBookings = async (eventId, newBookings) => {
+                try {
+                    await window.storage.set(`muse-bookings-${eventId}`, JSON.stringify(newBookings));
+                    setBookings(newBookings);
+                } catch (error) {
+                    console.error('Error saving bookings:', error);
+                }
+            };
+
+            const savePrs = async (eventId, newPrs) => {
+                try {
+                    await window.storage.set(`muse-prs-${eventId}`, JSON.stringify(newPrs), true);
+                    setPrs(newPrs);
+                } catch (error) {
+                    console.error('Error saving PRs:', error);
+                }
+            };
+
+            const saveGuestLists = async (eventId, newGuestLists) => {
+                try {
+                    await window.storage.set(`muse-guestlists-${eventId}`, JSON.stringify(newGuestLists), true);
+                    setGuestLists(newGuestLists);
+                } catch (error) {
+                    console.error('Error saving guest lists:', error);
+                }
+            };
+
+            const createEvent = async (eventData) => {
+                const newEvent = {
+                    id: Date.now().toString(),
+                    ...eventData,
+                    createdAt: new Date().toISOString()
+                };
+                const newEvents = [...events, newEvent];
+                await saveEvents(newEvents);
+                setShowNewEvent(false);
+                setCurrentEvent(newEvent);
+            };
+
+            const deleteEvent = async (eventId) => {
+                if (!confirm('Sei sicura di voler eliminare questa serata?')) return;
+                
+                const newEvents = events.filter(e => e.id !== eventId);
+                await saveEvents(newEvents);
+                
+                try {
+                    await window.storage.delete(`muse-tables-${eventId}`);
+                    await window.storage.delete(`muse-bookings-${eventId}`);
+                    await window.storage.delete(`muse-prs-${eventId}`);
+                    await window.storage.delete(`muse-guestlists-${eventId}`);
+                } catch (error) {
+                    console.log('Cleanup complete');
+                }
+                
+                if (currentEvent?.id === eventId) {
+                    setCurrentEvent(null);
+                }
+            };
+
+            const addTable = () => {
+                const newTable = {
+                    id: Date.now().toString(),
+                    number: tables.length + 1,
+                    x: 100,
+                    y: 100,
+                    width: 80,
+                    height: 80,
+                    capacity: 8,
+                    shape: 'round'
+                };
+                saveTables(currentEvent.id, [...tables, newTable]);
+            };
+
+            const removeTable = (tableId) => {
+                const newTables = tables.filter(t => t.id !== tableId);
+                saveTables(currentEvent.id, newTables);
+                
+                const newBookings = bookings.filter(b => b.tableId !== tableId);
+                saveBookings(currentEvent.id, newBookings);
+            };
+
+            const updateTable = (tableId, updates) => {
+                const newTables = tables.map(t => 
+                    t.id === tableId ? { ...t, ...updates } : t
+                );
+                saveTables(currentEvent.id, newTables);
+            };
+
+            const handleTableDragStart = (e, table) => {
+                setDraggedTable(table);
+                e.dataTransfer.effectAllowed = 'move';
+            };
+
+            const handleResizeStart = (e, table, corner) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setResizingTable({ table, corner });
+                setResizeStart({ 
+                    x: e.clientX, 
+                    y: e.clientY, 
+                    width: table.width || 80, 
+                    height: table.height || 80,
+                    tableX: table.x,
+                    tableY: table.y
+                });
+            };
+
+            const handleResizeMove = (e) => {
+                if (!resizingTable || !resizeStart) return;
+                
+                const deltaX = e.clientX - resizeStart.x;
+                const deltaY = e.clientY - resizeStart.y;
+                const { table, corner } = resizingTable;
+                
+                let newWidth = resizeStart.width;
+                let newHeight = resizeStart.height;
+                let newX = resizeStart.tableX;
+                let newY = resizeStart.tableY;
+                
+                switch(corner) {
+                    case 'se': // Bottom-right
+                        newWidth = Math.max(40, resizeStart.width + deltaX);
+                        newHeight = Math.max(40, resizeStart.height + deltaY);
+                        break;
+                    case 'sw': // Bottom-left
+                        newWidth = Math.max(40, resizeStart.width - deltaX);
+                        newHeight = Math.max(40, resizeStart.height + deltaY);
+                        newX = resizeStart.tableX + (resizeStart.width - newWidth);
+                        break;
+                    case 'ne': // Top-right
+                        newWidth = Math.max(40, resizeStart.width + deltaX);
+                        newHeight = Math.max(40, resizeStart.height - deltaY);
+                        newY = resizeStart.tableY + (resizeStart.height - newHeight);
+                        break;
+                    case 'nw': // Top-left
+                        newWidth = Math.max(40, resizeStart.width - deltaX);
+                        newHeight = Math.max(40, resizeStart.height - deltaY);
+                        newX = resizeStart.tableX + (resizeStart.width - newWidth);
+                        newY = resizeStart.tableY + (resizeStart.height - newHeight);
+                        break;
+                }
+                
+                updateTable(table.id, { 
+                    width: newWidth, 
+                    height: newHeight,
+                    x: newX,
+                    y: newY
+                });
+            };
+
+            const handleResizeEnd = () => {
+                setResizingTable(null);
+                setResizeStart(null);
+            };
+
+            useEffect(() => {
+                if (resizingTable) {
+                    document.addEventListener('mousemove', handleResizeMove);
+                    document.addEventListener('mouseup', handleResizeEnd);
+                    return () => {
+                        document.removeEventListener('mousemove', handleResizeMove);
+                        document.removeEventListener('mouseup', handleResizeEnd);
+                    };
+                }
+            }, [resizingTable, resizeStart]);
+
+            const handleFloorPlanDrop = (e) => {
+                e.preventDefault();
+                if (!draggedTable || !editMode) return;
+
+                const rect = floorPlanRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left - 40;
+                const y = e.clientY - rect.top - 40;
+
+                updateTable(draggedTable.id, { x: Math.max(0, x), y: Math.max(0, y) });
+                setDraggedTable(null);
+            };
+
+            const addBooking = async (bookingData) => {
+                const newBooking = {
+                    id: Date.now().toString(),
+                    tableId: selectedTable.id,
+                    ...bookingData,
+                    status: 'confirmed',
+                    createdAt: new Date().toISOString()
+                };
+                await saveBookings(currentEvent.id, [...bookings, newBooking]);
+                setSelectedTable(null);
+            };
+
+            const removeBooking = async (bookingId) => {
+                const newBookings = bookings.filter(b => b.id !== bookingId);
+                await saveBookings(currentEvent.id, newBookings);
+            };
+
+            const addPr = async (prData) => {
+                const newPr = {
+                    id: Date.now().toString(),
+                    ...prData,
+                    createdAt: new Date().toISOString()
+                };
+                await savePrs(currentEvent.id, [...prs, newPr]);
+                setShowNewPr(false);
+            };
+
+            const removePr = async (prId) => {
+                if (!confirm('Eliminare questo PR? Verranno rimosse anche le sue liste.')) return;
+                const newPrs = prs.filter(p => p.id !== prId);
+                await savePrs(currentEvent.id, newPrs);
+                
+                const newGuestLists = guestLists.filter(g => g.prId !== prId);
+                await saveGuestLists(currentEvent.id, newGuestLists);
+                
+                const newBookings = bookings.map(b => 
+                    b.prId === prId ? { ...b, prId: null, prName: null } : b
+                );
+                await saveBookings(currentEvent.id, newBookings);
+            };
+
+            const addGuestToList = async (prId, guestData) => {
+                const newGuest = {
+                    id: Date.now().toString(),
+                    prId,
+                    ...guestData,
+                    checkedIn: false,
+                    createdAt: new Date().toISOString()
+                };
+                await saveGuestLists(currentEvent.id, [...guestLists, newGuest]);
+            };
+
+            const importGuestsBatch = async (prId, guestsText) => {
+                const lines = guestsText.split('\n').filter(line => line.trim());
+                const newGuests = [];
+                
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (!line) return;
+                    
+                    // Try to parse formats like "Name - 3", "Name (3)", or just "Name"
+                    let guestName = line;
+                    let guestCount = 1;
+                    
+                    // Match "Name - 3" or "Name -3"
+                    const dashMatch = line.match(/^(.+?)\s*-\s*(\d+)$/);
+                    if (dashMatch) {
+                        guestName = dashMatch[1].trim();
+                        guestCount = parseInt(dashMatch[2]);
+                    } else {
+                        // Match "Name (3)" or "Name(3)"
+                        const parenMatch = line.match(/^(.+?)\s*\((\d+)\)$/);
+                        if (parenMatch) {
+                            guestName = parenMatch[1].trim();
+                            guestCount = parseInt(parenMatch[2]);
+                        }
+                    }
+                    
+                    if (guestName) {
+                        newGuests.push({
+                            id: `${Date.now()}-${Math.random()}`,
+                            prId,
+                            guestName,
+                            guestCount,
+                            checkedIn: false,
+                            createdAt: new Date().toISOString()
+                        });
+                    }
+                });
+                
+                if (newGuests.length > 0) {
+                    await saveGuestLists(currentEvent.id, [...guestLists, ...newGuests]);
+                }
+                
+                return newGuests.length;
+            };
+
+            const toggleGuestCheckIn = async (guestId) => {
+                const newGuestLists = guestLists.map(g =>
+                    g.id === guestId ? { ...g, checkedIn: !g.checkedIn } : g
+                );
+                await saveGuestLists(currentEvent.id, newGuestLists);
+            };
+
+            const removeGuest = async (guestId) => {
+                const newGuestLists = guestLists.filter(g => g.id !== guestId);
+                await saveGuestLists(currentEvent.id, newGuestLists);
+            };
+
+            const getPrStats = (prId) => {
+                const prGuestLists = guestLists.filter(g => g.prId === prId);
+                const prBookings = bookings.filter(b => b.prId === prId);
+                const checkedInGuests = prGuestLists.filter(g => g.checkedIn).length;
+                const totalGuestsInList = prGuestLists.reduce((sum, g) => sum + (g.guestCount || 1), 0);
+                const totalGuestsInTables = prBookings.reduce((sum, b) => sum + (b.guestCount || 0), 0);
+                
+                return {
+                    totalGuests: totalGuestsInList + totalGuestsInTables,
+                    guestListCount: totalGuestsInList,
+                    checkedInCount: checkedInGuests,
+                    tableBookings: prBookings.length,
+                    tableGuests: totalGuestsInTables
+                };
+            };
+
+            const getTableBooking = (tableId) => {
+                return bookings.find(b => b.tableId === tableId);
+            };
+
+            const getTableStatus = (table) => {
+                const booking = getTableBooking(table.id);
+                if (!booking) return 'available';
+                if (booking.status === 'arrived') return 'occupied';
+                return 'reserved';
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+                        <div className="text-white text-2xl font-light">Caricamento...</div>
+                    </div>
+                );
+            }
+
+            if (!currentEvent) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
+                        <div className="max-w-6xl mx-auto">
+                            <header className="mb-12 text-center">
+                                <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 mb-4 tracking-tight">
+                                    @_muse.in_
+                                </h1>
+                                <p className="text-purple-300 text-lg font-light">Gestione Tavoli Eventi</p>
+                            </header>
+
+                            <div className="mb-8 flex justify-between items-center">
+                                <h2 className="text-3xl font-bold text-white">Le tue serate</h2>
+                                <button
+                                    onClick={() => setShowNewEvent(true)}
+                                    className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all transform hover:scale-105 shadow-lg shadow-purple-500/50"
+                                >
+                                    <Plus size={20} />
+                                    Nuova Serata
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {events.map(event => (
+                                    <div
+                                        key={event.id}
+                                        className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6 hover:border-purple-400/60 transition-all cursor-pointer group relative overflow-hidden"
+                                        onClick={() => setCurrentEvent(event)}
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-pink-600/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        
+                                        <div className="relative z-10">
+                                            <h3 className="text-2xl font-bold text-white mb-4 group-hover:text-purple-300 transition-colors">
+                                                {event.name}
+                                            </h3>
+                                            
+                                            <div className="space-y-2 text-purple-300">
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar size={16} />
+                                                    <span className="text-sm">{new Date(event.date).toLocaleDateString('it-IT')}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <MapPin size={16} />
+                                                    <span className="text-sm">{event.venue}</span>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    deleteEvent(event.id);
+                                                }}
+                                                className="absolute top-4 right-4 text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {events.length === 0 && (
+                                <div className="text-center py-20 text-purple-300">
+                                    <Users size={64} className="mx-auto mb-4 opacity-50" />
+                                    <p className="text-xl">Nessuna serata creata. Inizia creando il tuo primo evento!</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {showNewEvent && <NewEventModal onClose={() => setShowNewEvent(false)} onCreate={createEvent} />}
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8">
+                    <div className="max-w-7xl mx-auto">
+                        <header className="mb-8 flex justify-between items-center">
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => setCurrentEvent(null)}
+                                    className="text-purple-300 hover:text-white transition-colors"
+                                >
+                                    <ChevronLeft size={32} />
+                                </button>
+                                <div>
+                                    <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400">
+                                        {currentEvent.name}
+                                    </h1>
+                                    <p className="text-purple-300">
+                                        {new Date(currentEvent.date).toLocaleDateString('it-IT')} • {currentEvent.venue}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowPrView(!showPrView)}
+                                    className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
+                                >
+                                    <Users size={20} />
+                                    {showPrView ? 'Tavoli' : 'Liste PR'}
+                                </button>
+                                {editMode ? (
+                                    <button
+                                        onClick={() => setEditMode(false)}
+                                        className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
+                                    >
+                                        <Save size={20} />
+                                        Salva Layout
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => setEditMode(true)}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
+                                    >
+                                        <Edit3 size={20} />
+                                        Modifica Layout
+                                    </button>
+                                )}
+                                {editMode && (
+                                    <button
+                                        onClick={addTable}
+                                        className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
+                                    >
+                                        <Plus size={20} />
+                                        Aggiungi Tavolo
+                                    </button>
+                                )}
+                            </div>
+                        </header>
+
+                        <div className="grid grid-cols-4 gap-6 mb-8">
+                            <StatCard 
+                                label="Tavoli Totali" 
+                                value={tables.length} 
+                                color="from-purple-500 to-pink-500"
+                            />
+                            <StatCard 
+                                label="Prenotazioni" 
+                                value={bookings.length} 
+                                color="from-cyan-500 to-blue-500"
+                            />
+                            <StatCard 
+                                label="PR Attivi" 
+                                value={prs.length} 
+                                color="from-pink-500 to-orange-500"
+                            />
+                            <StatCard 
+                                label="Totale Ospiti" 
+                                value={bookings.reduce((sum, b) => sum + (b.guestCount || 0), 0) + guestLists.reduce((sum, g) => sum + (g.guestCount || 1), 0)} 
+                                color="from-green-500 to-emerald-500"
+                            />
+                        </div>
+
+                        {showPrView ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* PR List */}
+                                <div className="lg:col-span-2">
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h2 className="text-2xl font-bold text-white">PR / Promoter</h2>
+                                            <button
+                                                onClick={() => setShowNewPr(true)}
+                                                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm"
+                                            >
+                                                <Plus size={16} />
+                                                Nuovo PR
+                                            </button>
+                                        </div>
+                                        <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                                            {prs.map(pr => {
+                                                const stats = getPrStats(pr.id);
+                                                return (
+                                                    <div
+                                                        key={pr.id}
+                                                        className="bg-slate-900/50 rounded-lg p-4 border border-purple-500/20 hover:border-purple-400/40 transition-all"
+                                                    >
+                                                        <div className="flex justify-between items-start mb-3">
+                                                            <div className="flex-1 cursor-pointer" onClick={() => setSelectedPr(pr)}>
+                                                                <h3 className="text-white font-bold text-lg">{pr.name}</h3>
+                                                                {pr.phone && <p className="text-purple-300 text-sm">{pr.phone}</p>}
+                                                            </div>
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const baseUrl = window.location.origin + window.location.pathname.replace('gestione-tavoli.html', 'pr-app.html');
+                                                                        const link = `${baseUrl}?event=${currentEvent.id}&pr=${pr.id}`;
+                                                                        navigator.clipboard.writeText(link);
+                                                                        alert('Link copiato! Invialo al PR via WhatsApp.');
+                                                                    }}
+                                                                    className="text-cyan-400 hover:text-cyan-300 text-sm bg-cyan-500/10 px-3 py-1 rounded font-medium"
+                                                                    title="Copia link per il PR"
+                                                                >
+                                                                    🔗 Link
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        removePr(pr.id);
+                                                                    }}
+                                                                    className="text-red-400 hover:text-red-300"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 gap-2 text-center">
+                                                            <div className="bg-purple-500/20 rounded p-2">
+                                                                <div className="text-purple-200 text-xs">Lista</div>
+                                                                <div className="text-white font-bold">{stats.guestListCount}</div>
+                                                            </div>
+                                                            <div className="bg-cyan-500/20 rounded p-2">
+                                                                <div className="text-cyan-200 text-xs">Tavoli</div>
+                                                                <div className="text-white font-bold">{stats.tableBookings}</div>
+                                                            </div>
+                                                            <div className="bg-green-500/20 rounded p-2">
+                                                                <div className="text-green-200 text-xs">Check-in</div>
+                                                                <div className="text-white font-bold">{stats.checkedInCount}/{stats.guestListCount}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {prs.length === 0 && (
+                                                <div className="text-center py-20 text-purple-300">
+                                                    <Users size={48} className="mx-auto mb-4 opacity-50" />
+                                                    <p>Nessun PR aggiunto</p>
+                                                    <p className="text-sm mt-2">Clicca "Nuovo PR" per iniziare</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Guest List Detail */}
+                                <div>
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                        <h2 className="text-2xl font-bold text-white mb-4">
+                                            {selectedPr ? `Lista ${selectedPr.name}` : 'Seleziona un PR'}
+                                        </h2>
+                                        {selectedPr ? (
+                                            <>
+                                                <div className="flex gap-2 mb-4">
+                                                    <button
+                                                        onClick={() => {
+                                                            const guestName = prompt('Nome ospite:');
+                                                            if (!guestName) return;
+                                                            const guestCount = parseInt(prompt('Numero persone:', '1') || '1');
+                                                            addGuestToList(selectedPr.id, { guestName, guestCount });
+                                                        }}
+                                                        className="flex-1 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition-all"
+                                                    >
+                                                        <Plus size={16} />
+                                                        Aggiungi
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setShowImportGuests(true)}
+                                                        className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition-all"
+                                                    >
+                                                        <Upload size={16} />
+                                                        Importa Lista
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                                                    {guestLists.filter(g => g.prId === selectedPr.id).map(guest => (
+                                                        <div
+                                                            key={guest.id}
+                                                            className={`rounded-lg p-3 border transition-all ${
+                                                                guest.checkedIn
+                                                                    ? 'bg-green-500/20 border-green-400/40'
+                                                                    : 'bg-slate-900/50 border-purple-500/20'
+                                                            }`}
+                                                        >
+                                                            <div className="flex justify-between items-center">
+                                                                <div className="flex-1">
+                                                                    <h4 className="text-white font-medium">{guest.guestName}</h4>
+                                                                    <p className="text-purple-300 text-xs">{guest.guestCount} {guest.guestCount === 1 ? 'persona' : 'persone'}</p>
+                                                                </div>
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => toggleGuestCheckIn(guest.id)}
+                                                                        className={`px-3 py-1 rounded text-xs transition-all ${
+                                                                            guest.checkedIn
+                                                                                ? 'bg-green-500 text-white'
+                                                                                : 'bg-slate-700 text-purple-300 hover:bg-slate-600'
+                                                                        }`}
+                                                                    >
+                                                                        {guest.checkedIn ? '✓' : 'Check-in'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => removeGuest(guest.id)}
+                                                                        className="text-red-400 hover:text-red-300"
+                                                                    >
+                                                                        <X size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {guestLists.filter(g => g.prId === selectedPr.id).length === 0 && (
+                                                        <div className="text-center py-12 text-purple-300">
+                                                            <p className="text-sm">Nessun ospite in lista</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="text-center py-12 text-purple-300">
+                                                <p className="text-sm">Clicca su un PR per vedere la sua lista</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="lg:col-span-2">
+                                <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                    <h2 className="text-2xl font-bold text-white mb-4">Piantina Locale</h2>
+                                    <div
+                                        ref={floorPlanRef}
+                                        className="relative bg-slate-900/80 rounded-lg border-2 border-dashed border-purple-500/30 h-[600px] overflow-hidden"
+                                        onDrop={handleFloorPlanDrop}
+                                        onDragOver={(e) => e.preventDefault()}
+                                    >
+                                        {tables.map(table => {
+                                            const status = getTableStatus(table);
+                                            const booking = getTableBooking(table.id);
+                                            const width = table.width || 80;
+                                            const height = table.height || 80;
+                                            
+                                            return (
+                                                <div
+                                                    key={table.id}
+                                                    draggable={editMode && !resizingTable}
+                                                    onDragStart={(e) => handleTableDragStart(e, table)}
+                                                    onClick={() => {
+                                                        if (editMode && !resizingTable) {
+                                                            setEditingTable(table);
+                                                        } else if (!editMode) {
+                                                            setSelectedTable(table);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        left: `${table.x}px`,
+                                                        top: `${table.y}px`,
+                                                        width: `${width}px`,
+                                                        height: `${height}px`,
+                                                        cursor: editMode ? 'move' : 'pointer'
+                                                    }}
+                                                    className={`absolute flex flex-col items-center justify-center transition-colors ${
+                                                        table.shape === 'round' ? 'rounded-full' : 'rounded-lg'
+                                                    } ${
+                                                        status === 'available'
+                                                            ? 'bg-green-500/20 border-2 border-green-400 hover:bg-green-500/30'
+                                                            : status === 'reserved'
+                                                            ? 'bg-yellow-500/20 border-2 border-yellow-400 hover:bg-yellow-500/30'
+                                                            : 'bg-red-500/20 border-2 border-red-400 hover:bg-red-500/30'
+                                                    }`}
+                                                >
+                                                    <span className="text-white font-bold text-lg">{table.number}</span>
+                                                    <span className="text-xs text-purple-200">{table.capacity}p</span>
+                                                    {booking && (
+                                                        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
+                                                            {booking.guestName}
+                                                        </div>
+                                                    )}
+                                                    {editMode && (
+                                                        <>
+                                                            {/* Resize handles */}
+                                                            <div
+                                                                onMouseDown={(e) => handleResizeStart(e, table, 'nw')}
+                                                                className="absolute -top-1 -left-1 w-3 h-3 bg-cyan-500 border border-white rounded-full cursor-nw-resize hover:bg-cyan-400 z-20"
+                                                            />
+                                                            <div
+                                                                onMouseDown={(e) => handleResizeStart(e, table, 'ne')}
+                                                                className="absolute -top-1 -right-1 w-3 h-3 bg-cyan-500 border border-white rounded-full cursor-ne-resize hover:bg-cyan-400 z-20"
+                                                            />
+                                                            <div
+                                                                onMouseDown={(e) => handleResizeStart(e, table, 'sw')}
+                                                                className="absolute -bottom-1 -left-1 w-3 h-3 bg-cyan-500 border border-white rounded-full cursor-sw-resize hover:bg-cyan-400 z-20"
+                                                            />
+                                                            <div
+                                                                onMouseDown={(e) => handleResizeStart(e, table, 'se')}
+                                                                className="absolute -bottom-1 -right-1 w-3 h-3 bg-cyan-500 border border-white rounded-full cursor-se-resize hover:bg-cyan-400 z-20"
+                                                            />
+                                                            
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    removeTable(table.id);
+                                                                }}
+                                                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 z-20"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                            
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    updateTable(table.id, { 
+                                                                        shape: table.shape === 'round' ? 'square' : 'round' 
+                                                                    });
+                                                                }}
+                                                                className="absolute bottom-1 left-1/2 transform -translate-x-1/2 bg-purple-500 text-white rounded px-2 py-0.5 hover:bg-purple-600 text-xs z-20"
+                                                                title="Cambia forma"
+                                                            >
+                                                                {table.shape === 'round' ? '⬜' : '⭕'}
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                        {tables.length === 0 && (
+                                            <div className="absolute inset-0 flex items-center justify-center text-purple-300">
+                                                <div className="text-center">
+                                                    <Users size={48} className="mx-auto mb-4 opacity-50" />
+                                                    <p>Clicca "Aggiungi Tavolo" per iniziare</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                    <h2 className="text-2xl font-bold text-white mb-4">Prenotazioni</h2>
+                                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                                        {bookings.map(booking => {
+                                            const table = tables.find(t => t.id === booking.tableId);
+                                            return (
+                                                <div
+                                                    key={booking.id}
+                                                    className="bg-slate-900/50 rounded-lg p-4 border border-purple-500/20 hover:border-purple-400/40 transition-all"
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div>
+                                                            <h3 className="text-white font-bold">{booking.guestName}</h3>
+                                                            <p className="text-purple-300 text-sm">Tavolo {table?.number}</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => removeBooking(booking.id)}
+                                                            className="text-red-400 hover:text-red-300"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                    <div className="text-sm text-purple-200 space-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <Users size={14} />
+                                                            {booking.guestCount} persone
+                                                        </div>
+                                                        {booking.prName && (
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs bg-pink-500/20 text-pink-300 px-2 py-0.5 rounded">PR: {booking.prName}</span>
+                                                            </div>
+                                                        )}
+                                                        {booking.phone && (
+                                                            <div className="flex items-center gap-2">
+                                                                <Phone size={14} />
+                                                                {booking.phone}
+                                                            </div>
+                                                        )}
+                                                        {booking.notes && (
+                                                            <div className="flex items-start gap-2">
+                                                                <StickyNote size={14} className="mt-0.5" />
+                                                                <span className="text-xs">{booking.notes}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {bookings.length === 0 && (
+                                            <div className="text-center py-12 text-purple-300">
+                                                <p>Nessuna prenotazione</p>
+                                                <p className="text-sm mt-2">Clicca su un tavolo per aggiungerne una</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        )}
+                    </div>
+
+                    {editingTable && (
+                        <TableEditModal
+                            table={editingTable}
+                            onClose={() => setEditingTable(null)}
+                            onSave={(updates) => {
+                                updateTable(editingTable.id, updates);
+                                setEditingTable(null);
+                            }}
+                        />
+                    )}
+
+                    {showNewPr && (
+                        <NewPrModal 
+                            onClose={() => setShowNewPr(false)} 
+                            onCreate={addPr} 
+                        />
+                    )}
+
+                    {showImportGuests && selectedPr && (
+                        <ImportGuestsModal
+                            pr={selectedPr}
+                            onClose={() => setShowImportGuests(false)}
+                            onImport={async (guestsText) => {
+                                const count = await importGuestsBatch(selectedPr.id, guestsText);
+                                alert(`${count} ospiti importati!`);
+                                setShowImportGuests(false);
+                            }}
+                        />
+                    )}
+
+                    {selectedTable && !editMode && (
+                        <BookingModal
+                            table={selectedTable}
+                            existingBooking={getTableBooking(selectedTable.id)}
+                            prs={prs}
+                            onClose={() => setSelectedTable(null)}
+                            onSave={addBooking}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        const StatCard = ({ label, value, color }) => (
+            <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6 relative overflow-hidden group">
+                <div className={`absolute inset-0 bg-gradient-to-br ${color} opacity-10 group-hover:opacity-20 transition-opacity`} />
+                <div className="relative z-10">
+                    <p className="text-purple-300 text-sm mb-2">{label}</p>
+                    <p className="text-4xl font-black text-white">{value}</p>
+                </div>
+            </div>
+        );
+
+        const NewEventModal = ({ onClose, onCreate }) => {
+            const [formData, setFormData] = useState({
+                name: '',
+                date: '',
+                venue: ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onCreate(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-purple-500/30 rounded-xl p-8 max-w-md w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-white">Nuova Serata</h2>
+                            <button onClick={onClose} className="text-purple-300 hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-purple-300 mb-2">Nome Evento</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                    placeholder="es. Tech House Night"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-purple-300 mb-2">Data</label>
+                                <input
+                                    type="date"
+                                    required
+                                    value={formData.date}
+                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-purple-300 mb-2">Location</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.venue}
+                                    onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                    placeholder="es. Parma"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white py-3 rounded-lg transition-all font-bold"
+                            >
+                                Crea Serata
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const ImportGuestsModal = ({ pr, onClose, onImport }) => {
+            const [guestsText, setGuestsText] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!guestsText.trim()) return;
+                onImport(guestsText);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-purple-500/30 rounded-xl p-8 max-w-2xl w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-white">Importa Lista - {pr.name}</h2>
+                            <button onClick={onClose} className="text-purple-300 hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        
+                        <div className="mb-4 bg-purple-900/30 border border-purple-500/30 rounded-lg p-4">
+                            <h3 className="text-white font-bold mb-2 text-sm">📋 Formati supportati:</h3>
+                            <div className="text-purple-200 text-xs space-y-1 font-mono">
+                                <div>• <span className="text-green-400">Mario Rossi</span> <span className="text-purple-400">(1 persona)</span></div>
+                                <div>• <span className="text-green-400">Luca Bianchi - 2</span> <span className="text-purple-400">(2 persone)</span></div>
+                                <div>• <span className="text-green-400">Sara Verdi (4)</span> <span className="text-purple-400">(4 persone)</span></div>
+                            </div>
+                            <p className="text-purple-300 text-xs mt-2">💡 Un nome per riga. Se non specifichi il numero, default = 1 persona</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-purple-300 mb-2">Incolla la tua lista qui:</label>
+                                <textarea
+                                    value={guestsText}
+                                    onChange={(e) => setGuestsText(e.target.value)}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400 resize-none font-mono text-sm"
+                                    rows="12"
+                                    placeholder="Mario Rossi&#10;Luca Bianchi - 2&#10;Sara Verdi (3)&#10;Giovanni Neri&#10;..."
+                                />
+                                <p className="text-purple-400 text-xs mt-2">
+                                    {guestsText.split('\n').filter(l => l.trim()).length} righe • 
+                                    Circa {guestsText.split('\n').filter(l => l.trim()).length} ospiti
+                                </p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg transition-all"
+                                >
+                                    Annulla
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white py-3 rounded-lg transition-all font-bold"
+                                >
+                                    Importa Lista
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const NewPrModal = ({ onClose, onCreate }) => {
+            const [formData, setFormData] = useState({
+                name: '',
+                phone: '',
+                instagram: ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onCreate(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-purple-500/30 rounded-xl p-8 max-w-md w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-white">Nuovo PR</h2>
+                            <button onClick={onClose} className="text-purple-300 hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-purple-300 mb-2">Nome</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                    placeholder="Nome PR"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-purple-300 mb-2">Telefono</label>
+                                <input
+                                    type="tel"
+                                    value={formData.phone}
+                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                    placeholder="+39 ..."
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-purple-300 mb-2">Instagram (opzionale)</label>
+                                <input
+                                    type="text"
+                                    value={formData.instagram}
+                                    onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                    placeholder="@username"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white py-3 rounded-lg transition-all font-bold"
+                            >
+                                Crea PR
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const TableEditModal = ({ table, onClose, onSave }) => {
+            const [formData, setFormData] = useState({
+                number: table.number,
+                capacity: table.capacity,
+                shape: table.shape
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-purple-500/30 rounded-xl p-8 max-w-md w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-white">Modifica Tavolo {table.number}</h2>
+                            <button onClick={onClose} className="text-purple-300 hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-purple-300 mb-2">Numero Tavolo</label>
+                                <input
+                                    type="number"
+                                    required
+                                    min="1"
+                                    value={formData.number}
+                                    onChange={(e) => setFormData({ ...formData, number: parseInt(e.target.value) })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-purple-300 mb-2">Capacità (persone)</label>
+                                <input
+                                    type="number"
+                                    required
+                                    min="1"
+                                    max="50"
+                                    value={formData.capacity}
+                                    onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-purple-300 mb-2">Forma</label>
+                                <select
+                                    value={formData.shape}
+                                    onChange={(e) => setFormData({ ...formData, shape: e.target.value })}
+                                    className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                >
+                                    <option value="round">Rotondo</option>
+                                    <option value="square">Quadrato</option>
+                                </select>
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white py-3 rounded-lg transition-all font-bold"
+                            >
+                                Salva Modifiche
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const BookingModal = ({ table, existingBooking, prs, onClose, onSave }) => {
+            const [formData, setFormData] = useState({
+                guestName: existingBooking?.guestName || '',
+                guestCount: existingBooking?.guestCount || table.capacity,
+                phone: existingBooking?.phone || '',
+                notes: existingBooking?.notes || '',
+                prId: existingBooking?.prId || '',
+                prName: existingBooking?.prName || ''
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-purple-500/30 rounded-xl p-8 max-w-md w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-white">
+                                {existingBooking ? 'Prenotazione' : 'Nuova Prenotazione'} - Tavolo {table.number}
+                            </h2>
+                            <button onClick={onClose} className="text-purple-300 hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        {existingBooking ? (
+                            <div className="text-purple-200 space-y-3">
+                                <p><strong>Ospite:</strong> {existingBooking.guestName}</p>
+                                <p><strong>Persone:</strong> {existingBooking.guestCount}</p>
+                                {existingBooking.prName && <p><strong>PR:</strong> {existingBooking.prName}</p>}
+                                {existingBooking.phone && <p><strong>Telefono:</strong> {existingBooking.phone}</p>}
+                                {existingBooking.notes && <p><strong>Note:</strong> {existingBooking.notes}</p>}
+                                <button
+                                    onClick={onClose}
+                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg mt-4"
+                                >
+                                    Chiudi
+                                </button>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-purple-300 mb-2">Nome Ospite</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.guestName}
+                                        onChange={(e) => setFormData({ ...formData, guestName: e.target.value })}
+                                        className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                        placeholder="Nome e cognome"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-purple-300 mb-2">Numero Persone</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        min="1"
+                                        max={table.capacity}
+                                        value={formData.guestCount}
+                                        onChange={(e) => setFormData({ ...formData, guestCount: parseInt(e.target.value) })}
+                                        className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-purple-300 mb-2">Telefono (opzionale)</label>
+                                    <input
+                                        type="tel"
+                                        value={formData.phone}
+                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                        className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                        placeholder="+39 ..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-purple-300 mb-2">PR / Promoter (opzionale)</label>
+                                    <select
+                                        value={formData.prId}
+                                        onChange={(e) => {
+                                            const selectedPr = prs.find(p => p.id === e.target.value);
+                                            setFormData({ 
+                                                ...formData, 
+                                                prId: e.target.value,
+                                                prName: selectedPr?.name || ''
+                                            });
+                                        }}
+                                        className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                    >
+                                        <option value="">Nessun PR</option>
+                                        {prs.map(pr => (
+                                            <option key={pr.id} value={pr.id}>{pr.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-purple-300 mb-2">Note (opzionale)</label>
+                                    <textarea
+                                        value={formData.notes}
+                                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                        className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400 resize-none"
+                                        rows="3"
+                                        placeholder="Allergie, richieste speciali..."
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white py-3 rounded-lg transition-all font-bold"
+                                >
+                                    Conferma Prenotazione
+                                </button>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<EventTablesManager />, document.getElementById('root'));
+    </script>
+</body>
+</html>
