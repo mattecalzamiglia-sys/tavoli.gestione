@@ -770,10 +770,12 @@
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        const baseUrl = window.location.origin + window.location.pathname.replace('gestione-tavoli.html', 'pr-app.html');
-                                                                        const link = `${baseUrl}?event=${currentEvent.id}&pr=${pr.id}`;
+                                                                        // Generate proper link for GitHub Pages
+                                                                        const baseUrl = window.location.origin + window.location.pathname.replace(/gestione-tavoli\.html.*$/, '');
+                                                                        const link = `${baseUrl}pr-app.html?event=${currentEvent.id}&pr=${pr.id}`;
+                                                                        
                                                                         navigator.clipboard.writeText(link);
-                                                                        alert('Link copiato! Invialo al PR via WhatsApp.');
+                                                                        alert(`Link copiato!\n\n${link}\n\nInvialo al PR via WhatsApp.`);
                                                                     }}
                                                                     className="text-cyan-400 hover:text-cyan-300 text-sm bg-cyan-500/10 px-3 py-1 rounded font-medium"
                                                                     title="Copia link per il PR"
