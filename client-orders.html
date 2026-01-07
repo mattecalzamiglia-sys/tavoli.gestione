@@ -57,6 +57,12 @@
             </svg>
         );
 
+        const Bell = ({ size = 24 }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+            </svg>
+        );
+
         // Storage wrapper
         const storage = {
             async get(key, shared = false) {
@@ -88,6 +94,7 @@
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState(null);
             const [showSuccess, setShowSuccess] = useState(false);
+            const [waiterCalled, setWaiterCalled] = useState(false);
 
             useEffect(() => {
                 loadData();
@@ -207,6 +214,34 @@
                 }
             };
 
+            const callWaiter = async () => {
+                try {
+                    const callsResult = await window.storage.get(`muse-waiter-calls-${event.id}`, true);
+                    let allCalls = [];
+                    if (callsResult) {
+                        allCalls = JSON.parse(callsResult.value);
+                    }
+
+                    const newCall = {
+                        id: Date.now().toString(),
+                        eventId: event.id,
+                        tableId: table.id,
+                        tableNumber: table.number,
+                        status: 'pending',
+                        createdAt: new Date().toISOString()
+                    };
+
+                    allCalls = [...allCalls, newCall];
+                    await window.storage.set(`muse-waiter-calls-${event.id}`, JSON.stringify(allCalls), true);
+
+                    setWaiterCalled(true);
+                    setTimeout(() => setWaiterCalled(false), 30000); // Reset after 30 seconds
+                } catch (error) {
+                    console.error('Error calling waiter:', error);
+                    alert('Errore. Riprova.');
+                }
+            };
+
             if (loading) {
                 return (
                     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
@@ -301,6 +336,27 @@
                                     </div>
                                 </div>
                             ))}
+                        </div>
+
+                        {/* Waiter Call Button */}
+                        <div className="mb-6">
+                            <button
+                                onClick={callWaiter}
+                                disabled={waiterCalled}
+                                className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all ${
+                                    waiterCalled
+                                        ? 'bg-green-500 text-white cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white'
+                                }`}
+                            >
+                                <Bell size={24} />
+                                {waiterCalled ? '✓ Cameriere Chiamato' : 'Chiama Cameriere'}
+                            </button>
+                            {waiterCalled && (
+                                <p className="text-center text-purple-300 text-sm mt-2">
+                                    Il cameriere sta arrivando al tuo tavolo
+                                </p>
+                            )}
                         </div>
 
                         {/* Orders History */}
