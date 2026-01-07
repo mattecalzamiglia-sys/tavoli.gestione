@@ -157,7 +157,11 @@
             const [showNewEvent, setShowNewEvent] = useState(false);
             const [showNewPr, setShowNewPr] = useState(false);
             const [showPrView, setShowPrView] = useState(false);
+            const [showOrdersView, setShowOrdersView] = useState(false);
+            const [showMenuEditor, setShowMenuEditor] = useState(false);
             const [showImportGuests, setShowImportGuests] = useState(false);
+            const [menu, setMenu] = useState([]);
+            const [orders, setOrders] = useState([]);
             const [selectedPr, setSelectedPr] = useState(null);
             const [selectedTable, setSelectedTable] = useState(null);
             const [draggedTable, setDraggedTable] = useState(null);
@@ -242,6 +246,28 @@
                 } catch (error) {
                     setGuestLists([]);
                 }
+
+                try {
+                    const menuResult = await window.storage.get(`muse-menu-${eventId}`, true);
+                    if (menuResult) {
+                        setMenu(JSON.parse(menuResult.value));
+                    } else {
+                        setMenu([]);
+                    }
+                } catch (error) {
+                    setMenu([]);
+                }
+
+                try {
+                    const ordersResult = await window.storage.get(`muse-orders-${eventId}`, true);
+                    if (ordersResult) {
+                        setOrders(JSON.parse(ordersResult.value));
+                    } else {
+                        setOrders([]);
+                    }
+                } catch (error) {
+                    setOrders([]);
+                }
             };
 
             const saveEvents = async (newEvents) => {
@@ -287,6 +313,52 @@
                 } catch (error) {
                     console.error('Error saving guest lists:', error);
                 }
+            };
+
+            const saveMenu = async (eventId, newMenu) => {
+                try {
+                    await window.storage.set(`muse-menu-${eventId}`, JSON.stringify(newMenu), true);
+                    setMenu(newMenu);
+                } catch (error) {
+                    console.error('Error saving menu:', error);
+                }
+            };
+
+            const saveOrders = async (eventId, newOrders) => {
+                try {
+                    await window.storage.set(`muse-orders-${eventId}`, JSON.stringify(newOrders), true);
+                    setOrders(newOrders);
+                } catch (error) {
+                    console.error('Error saving orders:', error);
+                }
+            };
+
+            const addMenuItem = async (item) => {
+                const newItem = {
+                    id: Date.now().toString(),
+                    ...item,
+                    createdAt: new Date().toISOString()
+                };
+                await saveMenu(currentEvent.id, [...menu, newItem]);
+            };
+
+            const removeMenuItem = async (itemId) => {
+                const newMenu = menu.filter(m => m.id !== itemId);
+                await saveMenu(currentEvent.id, newMenu);
+            };
+
+            const getTableOrders = (tableId) => {
+                return orders.filter(o => o.tableId === tableId);
+            };
+
+            const getTableTotal = (tableId) => {
+                return orders
+                    .filter(o => o.tableId === tableId)
+                    .reduce((sum, o) => sum + o.total, 0);
+            };
+
+            const getTotalRevenue = () => {
+                return orders.reduce((sum, o) => sum + o.total, 0);
             };
 
             const createEvent = async (eventData) => {
@@ -680,13 +752,36 @@
                             </div>
                             <div className="flex gap-3">
                                 <button
-                                    onClick={() => setShowPrView(!showPrView)}
-                                    className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
+                                    onClick={() => {
+                                        setShowPrView(false);
+                                        setShowOrdersView(false);
+                                    }}
+                                    className={`${!showPrView && !showOrdersView ? 'bg-purple-600' : 'bg-slate-700'} hover:bg-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all`}
+                                >
+                                    <MapPin size={20} />
+                                    Tavoli
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setShowPrView(true);
+                                        setShowOrdersView(false);
+                                    }}
+                                    className={`${showPrView ? 'bg-cyan-600' : 'bg-slate-700'} hover:bg-cyan-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all`}
                                 >
                                     <Users size={20} />
-                                    {showPrView ? 'Tavoli' : 'Liste PR'}
+                                    Liste PR
                                 </button>
-                                {editMode ? (
+                                <button
+                                    onClick={() => {
+                                        setShowPrView(false);
+                                        setShowOrdersView(true);
+                                    }}
+                                    className={`${showOrdersView ? 'bg-pink-600' : 'bg-slate-700'} hover:bg-pink-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all`}
+                                >
+                                    🍾
+                                    Ordini
+                                </button>
+                                {!showPrView && !showOrdersView && (editMode ? (
                                     <button
                                         onClick={() => setEditMode(false)}
                                         className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
@@ -702,8 +797,8 @@
                                         <Edit3 size={20} />
                                         Modifica Layout
                                     </button>
-                                )}
-                                {editMode && (
+                                ))}
+                                {editMode && !showPrView && !showOrdersView && (
                                     <button
                                         onClick={addTable}
                                         className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
@@ -715,7 +810,7 @@
                             </div>
                         </header>
 
-                        <div className="grid grid-cols-4 gap-6 mb-8">
+                        <div className="grid grid-cols-5 gap-6 mb-8">
                             <StatCard 
                                 label="Tavoli Totali" 
                                 value={tables.length} 
@@ -736,9 +831,144 @@
                                 value={bookings.reduce((sum, b) => sum + (b.guestCount || 0), 0) + guestLists.reduce((sum, g) => sum + (g.guestCount || 1), 0)} 
                                 color="from-green-500 to-emerald-500"
                             />
+                            <StatCard 
+                                label="Fatturato" 
+                                value={`€${getTotalRevenue()}`} 
+                                color="from-yellow-500 to-orange-500"
+                            />
                         </div>
 
-                        {showPrView ? (
+                        {showOrdersView ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Menu Editor & Orders List */}
+                                <div className="lg:col-span-2">
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6 mb-6">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h2 className="text-2xl font-bold text-white">Menu</h2>
+                                            <button
+                                                onClick={() => {
+                                                    const name = prompt('Nome prodotto:');
+                                                    if (!name) return;
+                                                    const category = prompt('Categoria (es: Bottiglie, Drink, Cocktail):');
+                                                    if (!category) return;
+                                                    const price = parseFloat(prompt('Prezzo €:'));
+                                                    if (isNaN(price)) return;
+                                                    addMenuItem({ name, category, price });
+                                                }}
+                                                className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm"
+                                            >
+                                                <Plus size={16} />
+                                                Aggiungi Prodotto
+                                            </button>
+                                        </div>
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                            {menu.map(item => (
+                                                <div key={item.id} className="flex justify-between items-center bg-slate-900/50 p-3 rounded-lg">
+                                                    <div>
+                                                        <span className="text-white font-bold">{item.name}</span>
+                                                        <span className="text-purple-300 text-sm ml-2">({item.category})</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-green-400 font-bold">€{item.price.toFixed(2)}</span>
+                                                        <button
+                                                            onClick={() => removeMenuItem(item.id)}
+                                                            className="text-red-400 hover:text-red-300"
+                                                        >
+                                                            <X size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {menu.length === 0 && (
+                                                <div className="text-center py-8 text-purple-300">
+                                                    <p>Nessun prodotto nel menu</p>
+                                                    <p className="text-sm mt-2">Aggiungi prodotti per abilitare gli ordini</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                        <h2 className="text-2xl font-bold text-white mb-4">Tutti gli Ordini</h2>
+                                        <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                                            {tables.map(table => {
+                                                const tableOrders = getTableOrders(table.id);
+                                                const tableTotal = getTableTotal(table.id);
+                                                if (tableOrders.length === 0) return null;
+                                                
+                                                return (
+                                                    <div key={table.id} className="bg-slate-900/50 rounded-lg p-4 border border-purple-500/20">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <div>
+                                                                <h3 className="text-white font-bold">Tavolo {table.number}</h3>
+                                                                <p className="text-purple-300 text-sm">{tableOrders.length} ordini</p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-yellow-400 font-bold text-lg">€{tableTotal.toFixed(2)}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1 text-sm text-purple-200">
+                                                            {tableOrders.map(order => (
+                                                                <div key={order.id} className="flex justify-between">
+                                                                    <span>{order.quantity}x {order.productName}</span>
+                                                                    <span>€{order.total.toFixed(2)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {orders.length === 0 && (
+                                                <div className="text-center py-12 text-purple-300">
+                                                    <p>Nessun ordine ancora</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Table Links */}
+                                <div>
+                                    <div className="bg-slate-800/50 backdrop-blur-sm border border-purple-500/30 rounded-xl p-6">
+                                        <h2 className="text-2xl font-bold text-white mb-4">Link Ordini Tavoli</h2>
+                                        <p className="text-purple-300 text-sm mb-4">Genera link QR per ogni tavolo</p>
+                                        <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                                            {tables.map(table => {
+                                                const tableTotal = getTableTotal(table.id);
+                                                const booking = getTableBooking(table.id);
+                                                
+                                                return (
+                                                    <div key={table.id} className="bg-slate-900/50 rounded-lg p-3 border border-purple-500/20">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <div>
+                                                                <h3 className="text-white font-bold">Tavolo {table.number}</h3>
+                                                                {booking && <p className="text-purple-300 text-xs">{booking.guestName}</p>}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const baseUrl = window.location.origin + window.location.pathname.replace(/gestione-tavoli\.html.*$/, '');
+                                                                    const link = `${baseUrl}client-orders.html?event=${currentEvent.id}&table=${table.id}`;
+                                                                    navigator.clipboard.writeText(link);
+                                                                    alert(`Link copiato!\n\n${link}\n\nInvialo ai clienti o genera QR code.`);
+                                                                }}
+                                                                className="text-cyan-400 hover:text-cyan-300 text-sm bg-cyan-500/10 px-3 py-1 rounded font-medium"
+                                                            >
+                                                                🔗 Link
+                                                            </button>
+                                                        </div>
+                                                        {tableTotal > 0 && (
+                                                            <div className="text-yellow-400 font-bold text-sm">
+                                                                Totale: €{tableTotal.toFixed(2)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : showPrView ? (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 {/* PR List */}
                                 <div className="lg:col-span-2">
