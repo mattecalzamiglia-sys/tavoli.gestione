@@ -8,6 +8,25 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyA-m6tX87TZtqTDg2kuE04zDvxkJ_vH2Yg",
+            authDomain: "gestionale-discoteche-2026.firebaseapp.com",
+            projectId: "gestionale-discoteche-2026",
+            storageBucket: "gestionale-discoteche-2026.firebasestorage.app",
+            messagingSenderId: "299126578946",
+            appId: "1:299126578946:web:2609823671a0eed056ac1b",
+            measurementId: "G-MK1GS1ZBL8"
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+    </script>
     <style>
         body {
             margin: 0;
@@ -143,38 +162,103 @@
             </svg>
         );
 
-        // Simple localStorage wrapper for compatibility
-        const storage = {
-            async get(key) {
+        const Download = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+            </svg>
+        );
+
+        const Search = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+        );
+
+        const CheckCircle = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+        );
+
+        const Loader = ({ size = 24, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+        );
+
+        // Firebase Firestore wrapper - Real-time sync
+        const db = firebase.firestore();
+        
+        const firebaseStorage = {
+            // Get document from Firestore
+            async get(collection, docId) {
                 try {
-                    const value = localStorage.getItem(key);
-                    return value ? { key, value } : null;
+                    const doc = await db.collection(collection).doc(docId).get();
+                    if (doc.exists) {
+                        return { id: doc.id, ...doc.data() };
+                    }
+                    return null;
                 } catch (error) {
-                    console.error('Storage get error:', error);
+                    console.error('Firebase get error:', error);
                     return null;
                 }
             },
-            async set(key, value) {
+            
+            // Set/Update document in Firestore
+            async set(collection, docId, data) {
                 try {
-                    localStorage.setItem(key, value);
-                    return { key, value };
+                    await db.collection(collection).doc(docId).set(data, { merge: true });
+                    return { id: docId, ...data };
                 } catch (error) {
-                    console.error('Storage set error:', error);
+                    console.error('Firebase set error:', error);
                     return null;
                 }
             },
-            async delete(key) {
+            
+            // Delete document from Firestore
+            async delete(collection, docId) {
                 try {
-                    localStorage.removeItem(key);
-                    return { key, deleted: true };
+                    await db.collection(collection).doc(docId).delete();
+                    return { id: docId, deleted: true };
                 } catch (error) {
-                    console.error('Storage delete error:', error);
+                    console.error('Firebase delete error:', error);
                     return null;
                 }
+            },
+            
+            // Get all documents from a collection
+            async getAll(collection) {
+                try {
+                    const snapshot = await db.collection(collection).get();
+                    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                } catch (error) {
+                    console.error('Firebase getAll error:', error);
+                    return [];
+                }
+            },
+            
+            // Subscribe to real-time updates
+            subscribe(collection, docId, callback) {
+                return db.collection(collection).doc(docId).onSnapshot(doc => {
+                    if (doc.exists) {
+                        callback({ id: doc.id, ...doc.data() });
+                    } else {
+                        callback(null);
+                    }
+                });
+            },
+            
+            // Subscribe to collection updates
+            subscribeCollection(collection, callback) {
+                return db.collection(collection).onSnapshot(snapshot => {
+                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    callback(data);
+                });
             }
         };
 
-        window.storage = storage;
+        window.firebaseStorage = firebaseStorage;
+        window.db = db;
 
         const EventTablesManager = () => {
             const [events, setEvents] = useState([]);
@@ -205,7 +289,22 @@
             const [editingTable, setEditingTable] = useState(null);
             const [loading, setLoading] = useState(true);
             
+            // New states for enhanced features
+            const [inventoryFilter, setInventoryFilter] = useState('');
+            const [staffFilter, setStaffFilter] = useState('');
+            const [orderFilter, setOrderFilter] = useState('all'); // all, pending, preparing, served
+            const [deleteConfirm, setDeleteConfirm] = useState(null); // { type: 'staff'|'inventory'|'menu', id, name }
+            const [showAddMenuModal, setShowAddMenuModal] = useState(false);
+            
             const floorPlanRef = useRef(null);
+            const unsubscribeRefs = useRef([]);
+
+            // Cleanup subscriptions on unmount
+            useEffect(() => {
+                return () => {
+                    unsubscribeRefs.current.forEach(unsub => unsub && unsub());
+                };
+            }, []);
 
             useEffect(() => {
                 loadEvents();
@@ -213,198 +312,233 @@
 
             useEffect(() => {
                 if (currentEvent) {
-                    loadTablesAndBookings(currentEvent.id);
+                    setupRealtimeListeners(currentEvent.id);
                 }
+                return () => {
+                    // Cleanup previous listeners when event changes
+                    unsubscribeRefs.current.forEach(unsub => unsub && unsub());
+                    unsubscribeRefs.current = [];
+                };
             }, [currentEvent]);
 
             const loadEvents = async () => {
                 try {
-                    const result = await window.storage.get('muse-events');
-                    if (result) {
-                        const eventsList = JSON.parse(result.value);
+                    // Subscribe to events collection for real-time updates
+                    const unsub = db.collection('events').onSnapshot(snapshot => {
+                        const eventsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setEvents(eventsList);
-                    }
+                        setLoading(false);
+                    });
+                    unsubscribeRefs.current.push(unsub);
                 } catch (error) {
-                    console.log('No events found, starting fresh');
+                    console.log('Error loading events:', error);
+                    setLoading(false);
                 }
-                setLoading(false);
             };
 
-            const loadTablesAndBookings = async (eventId) => {
-                try {
-                    const tablesResult = await window.storage.get(`muse-tables-${eventId}`);
-                    if (tablesResult) {
-                        const loadedTables = JSON.parse(tablesResult.value);
-                        // Add default width/height to old tables that don't have them
-                        const updatedTables = loadedTables.map(t => ({
-                            ...t,
-                            width: t.width || 80,
-                            height: t.height || 80
+            const setupRealtimeListeners = (eventId) => {
+                // Tables listener
+                const unsubTables = db.collection('events').doc(eventId).collection('tables')
+                    .onSnapshot(snapshot => {
+                        const tablesList = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data(),
+                            width: doc.data().width || 80,
+                            height: doc.data().height || 80
                         }));
-                        setTables(updatedTables);
-                    } else {
-                        setTables([]);
-                    }
-                } catch (error) {
-                    setTables([]);
-                }
+                        setTables(tablesList);
+                    });
+                unsubscribeRefs.current.push(unsubTables);
 
-                try {
-                    const bookingsResult = await window.storage.get(`muse-bookings-${eventId}`);
-                    if (bookingsResult) {
-                        setBookings(JSON.parse(bookingsResult.value));
-                    } else {
-                        setBookings([]);
-                    }
-                } catch (error) {
-                    setBookings([]);
-                }
+                // Bookings listener
+                const unsubBookings = db.collection('events').doc(eventId).collection('bookings')
+                    .onSnapshot(snapshot => {
+                        const bookingsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setBookings(bookingsList);
+                    });
+                unsubscribeRefs.current.push(unsubBookings);
 
-                try {
-                    const prsResult = await window.storage.get(`muse-prs-${eventId}`, true);
-                    if (prsResult) {
-                        setPrs(JSON.parse(prsResult.value));
-                    } else {
-                        setPrs([]);
-                    }
-                } catch (error) {
-                    setPrs([]);
-                }
+                // PRs listener
+                const unsubPrs = db.collection('events').doc(eventId).collection('prs')
+                    .onSnapshot(snapshot => {
+                        const prsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setPrs(prsList);
+                    });
+                unsubscribeRefs.current.push(unsubPrs);
 
-                try {
-                    const guestListsResult = await window.storage.get(`muse-guestlists-${eventId}`, true);
-                    if (guestListsResult) {
-                        setGuestLists(JSON.parse(guestListsResult.value));
-                    } else {
-                        setGuestLists([]);
-                    }
-                } catch (error) {
-                    setGuestLists([]);
-                }
+                // Guest lists listener
+                const unsubGuestLists = db.collection('events').doc(eventId).collection('guestLists')
+                    .onSnapshot(snapshot => {
+                        const guestListsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setGuestLists(guestListsList);
+                    });
+                unsubscribeRefs.current.push(unsubGuestLists);
 
-                try {
-                    const menuResult = await window.storage.get(`muse-menu-${eventId}`, true);
-                    if (menuResult) {
-                        setMenu(JSON.parse(menuResult.value));
-                    } else {
-                        setMenu([]);
-                    }
-                } catch (error) {
-                    setMenu([]);
-                }
+                // Menu listener
+                const unsubMenu = db.collection('events').doc(eventId).collection('menu')
+                    .onSnapshot(snapshot => {
+                        const menuList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setMenu(menuList);
+                    });
+                unsubscribeRefs.current.push(unsubMenu);
 
-                try {
-                    const ordersResult = await window.storage.get(`muse-orders-${eventId}`, true);
-                    if (ordersResult) {
-                        setOrders(JSON.parse(ordersResult.value));
-                    } else {
-                        setOrders([]);
-                    }
-                } catch (error) {
-                    setOrders([]);
-                }
+                // Orders listener
+                const unsubOrders = db.collection('events').doc(eventId).collection('orders')
+                    .onSnapshot(snapshot => {
+                        const ordersList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setOrders(ordersList);
+                    });
+                unsubscribeRefs.current.push(unsubOrders);
 
-                try {
-                    const callsResult = await window.storage.get(`muse-waiter-calls-${eventId}`, true);
-                    if (callsResult) {
-                        const allCalls = JSON.parse(callsResult.value);
-                        // Show only pending calls from last hour
-                        const recentCalls = allCalls.filter(c => {
-                            const callTime = new Date(c.createdAt);
-                            const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-                            return c.status === 'pending' && callTime > hourAgo;
-                        });
-                        setWaiterCalls(recentCalls);
-                    } else {
-                        setWaiterCalls([]);
-                    }
-                } catch (error) {
-                    setWaiterCalls([]);
-                }
+                // Waiter calls listener - only pending from last hour
+                const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+                const unsubCalls = db.collection('events').doc(eventId).collection('waiterCalls')
+                    .where('status', '==', 'pending')
+                    .where('createdAt', '>', hourAgo.toISOString())
+                    .onSnapshot(snapshot => {
+                        const callsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setWaiterCalls(callsList);
+                    });
+                unsubscribeRefs.current.push(unsubCalls);
 
-                try {
-                    const inventoryResult = await window.storage.get(`muse-inventory-${eventId}`, true);
-                    if (inventoryResult) {
-                        setInventory(JSON.parse(inventoryResult.value));
-                    } else {
-                        setInventory([]);
-                    }
-                } catch (error) {
-                    setInventory([]);
-                }
+                // Inventory listener
+                const unsubInventory = db.collection('events').doc(eventId).collection('inventory')
+                    .onSnapshot(snapshot => {
+                        const inventoryList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setInventory(inventoryList);
+                    });
+                unsubscribeRefs.current.push(unsubInventory);
 
-                try {
-                    const staffResult = await window.storage.get(`muse-staff-${eventId}`, true);
-                    if (staffResult) {
-                        setStaff(JSON.parse(staffResult.value));
-                    } else {
-                        setStaff([]);
-                    }
-                } catch (error) {
-                    setStaff([]);
-                }
+                // Staff listener
+                const unsubStaff = db.collection('events').doc(eventId).collection('staff')
+                    .onSnapshot(snapshot => {
+                        const staffList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setStaff(staffList);
+                    });
+                unsubscribeRefs.current.push(unsubStaff);
             };
 
-            const saveEvents = async (newEvents) => {
+            // SAVE FUNCTIONS - Firebase versions
+            const saveEvents = async (newEvent) => {
                 try {
-                    await window.storage.set('muse-events', JSON.stringify(newEvents));
-                    setEvents(newEvents);
+                    if (newEvent.id) {
+                        await db.collection('events').doc(newEvent.id).set(newEvent);
+                    }
                 } catch (error) {
-                    console.error('Error saving events:', error);
+                    console.error('Error saving event:', error);
                 }
             };
 
             const saveTables = async (eventId, newTables) => {
+                // Tables are saved individually, this updates the local state
+                setTables(newTables);
+            };
+
+            const saveTable = async (eventId, table) => {
                 try {
-                    await window.storage.set(`muse-tables-${eventId}`, JSON.stringify(newTables));
-                    setTables(newTables);
+                    await db.collection('events').doc(eventId).collection('tables').doc(table.id).set(table);
                 } catch (error) {
-                    console.error('Error saving tables:', error);
+                    console.error('Error saving table:', error);
+                }
+            };
+
+            const deleteTable = async (eventId, tableId) => {
+                try {
+                    await db.collection('events').doc(eventId).collection('tables').doc(tableId).delete();
+                } catch (error) {
+                    console.error('Error deleting table:', error);
                 }
             };
 
             const saveBookings = async (eventId, newBookings) => {
+                setBookings(newBookings);
+            };
+
+            const saveBooking = async (eventId, booking) => {
                 try {
-                    await window.storage.set(`muse-bookings-${eventId}`, JSON.stringify(newBookings));
-                    setBookings(newBookings);
+                    await db.collection('events').doc(eventId).collection('bookings').doc(booking.id).set(booking);
                 } catch (error) {
-                    console.error('Error saving bookings:', error);
+                    console.error('Error saving booking:', error);
+                }
+            };
+
+            const deleteBooking = async (eventId, bookingId) => {
+                try {
+                    await db.collection('events').doc(eventId).collection('bookings').doc(bookingId).delete();
+                } catch (error) {
+                    console.error('Error deleting booking:', error);
                 }
             };
 
             const savePrs = async (eventId, newPrs) => {
+                setPrs(newPrs);
+            };
+
+            const savePr = async (eventId, pr) => {
                 try {
-                    await window.storage.set(`muse-prs-${eventId}`, JSON.stringify(newPrs), true);
-                    setPrs(newPrs);
+                    await db.collection('events').doc(eventId).collection('prs').doc(pr.id).set(pr);
                 } catch (error) {
-                    console.error('Error saving PRs:', error);
+                    console.error('Error saving PR:', error);
+                }
+            };
+
+            const deletePr = async (eventId, prId) => {
+                try {
+                    await db.collection('events').doc(eventId).collection('prs').doc(prId).delete();
+                } catch (error) {
+                    console.error('Error deleting PR:', error);
                 }
             };
 
             const saveGuestLists = async (eventId, newGuestLists) => {
+                setGuestLists(newGuestLists);
+            };
+
+            const saveGuest = async (eventId, guest) => {
                 try {
-                    await window.storage.set(`muse-guestlists-${eventId}`, JSON.stringify(newGuestLists), true);
-                    setGuestLists(newGuestLists);
+                    await db.collection('events').doc(eventId).collection('guestLists').doc(guest.id).set(guest);
                 } catch (error) {
-                    console.error('Error saving guest lists:', error);
+                    console.error('Error saving guest:', error);
+                }
+            };
+
+            const deleteGuest = async (eventId, guestId) => {
+                try {
+                    await db.collection('events').doc(eventId).collection('guestLists').doc(guestId).delete();
+                } catch (error) {
+                    console.error('Error deleting guest:', error);
                 }
             };
 
             const saveMenu = async (eventId, newMenu) => {
+                setMenu(newMenu);
+            };
+
+            const saveMenuItem = async (eventId, item) => {
                 try {
-                    await window.storage.set(`muse-menu-${eventId}`, JSON.stringify(newMenu), true);
-                    setMenu(newMenu);
+                    await db.collection('events').doc(eventId).collection('menu').doc(item.id).set(item);
                 } catch (error) {
-                    console.error('Error saving menu:', error);
+                    console.error('Error saving menu item:', error);
+                }
+            };
+
+            const deleteMenuItem = async (eventId, itemId) => {
+                try {
+                    await db.collection('events').doc(eventId).collection('menu').doc(itemId).delete();
+                } catch (error) {
+                    console.error('Error deleting menu item:', error);
                 }
             };
 
             const saveOrders = async (eventId, newOrders) => {
+                setOrders(newOrders);
+            };
+
+            const saveOrder = async (eventId, order) => {
                 try {
-                    await window.storage.set(`muse-orders-${eventId}`, JSON.stringify(newOrders), true);
-                    setOrders(newOrders);
+                    await db.collection('events').doc(eventId).collection('orders').doc(order.id).set(order);
                 } catch (error) {
-                    console.error('Error saving orders:', error);
+                    console.error('Error saving order:', error);
                 }
             };
 
@@ -414,12 +548,11 @@
                     ...item,
                     createdAt: new Date().toISOString()
                 };
-                await saveMenu(currentEvent.id, [...menu, newItem]);
+                await saveMenuItem(currentEvent.id, newItem);
             };
 
             const removeMenuItem = async (itemId) => {
-                const newMenu = menu.filter(m => m.id !== itemId);
-                await saveMenu(currentEvent.id, newMenu);
+                await deleteMenuItem(currentEvent.id, itemId);
             };
 
             const getTableOrders = (tableId) => {
@@ -436,29 +569,182 @@
                 return orders.reduce((sum, o) => sum + o.total, 0);
             };
 
+            // ORDER STATUS MANAGEMENT
+            const updateOrderStatus = async (orderId, newStatus) => {
+                const newOrders = orders.map(o =>
+                    o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date().toISOString() } : o
+                );
+                await saveOrders(currentEvent.id, newOrders);
+            };
+
+            const getOrdersByStatus = (status) => {
+                if (status === 'all') return orders;
+                return orders.filter(o => (o.status || 'pending') === status);
+            };
+
+            // INVENTORY-MENU HELPERS
+            const getInventoryStock = (productName) => {
+                const item = inventory.find(i => i.name.toLowerCase() === productName.toLowerCase());
+                if (!item) return null;
+                const bottlesUsed = calculateBottlesUsed();
+                const usedFromOrders = bottlesUsed[item.name] || 0;
+                const totalUsed = usedFromOrders + (item.manualConsumption || 0);
+                return item.initialStock - totalUsed;
+            };
+
+            const isProductAvailable = (productName) => {
+                const stock = getInventoryStock(productName);
+                return stock === null || stock > 0;
+            };
+
+            // EXPORT CSV FUNCTIONS
+            const exportOrdersCSV = () => {
+                const headers = ['Tavolo', 'Prodotto', 'Quantità', 'Prezzo Unit.', 'Totale', 'Stato', 'Ora'];
+                const rows = orders.map(o => {
+                    const table = tables.find(t => t.id === o.tableId);
+                    return [
+                        table?.number || 'N/A',
+                        o.productName,
+                        o.quantity,
+                        (o.total / o.quantity).toFixed(2),
+                        o.total.toFixed(2),
+                        o.status || 'pending',
+                        new Date(o.createdAt).toLocaleString('it-IT')
+                    ];
+                });
+                downloadCSV([headers, ...rows], `ordini_${currentEvent.name}_${new Date().toISOString().split('T')[0]}.csv`);
+            };
+
+            const exportInventoryCSV = () => {
+                const headers = ['Prodotto', 'Categoria', 'Prezzo', 'Stock Iniziale', 'Da Ordini', 'Manuale', 'Rimanente'];
+                const bottlesUsed = calculateBottlesUsed();
+                const rows = inventory.map(i => {
+                    const fromOrders = bottlesUsed[i.name] || 0;
+                    const remaining = i.initialStock - fromOrders - (i.manualConsumption || 0);
+                    return [
+                        i.name,
+                        i.category,
+                        i.unitPrice.toFixed(2),
+                        i.initialStock,
+                        fromOrders,
+                        i.manualConsumption || 0,
+                        remaining
+                    ];
+                });
+                downloadCSV([headers, ...rows], `inventario_${currentEvent.name}_${new Date().toISOString().split('T')[0]}.csv`);
+            };
+
+            const exportStaffCSV = () => {
+                const headers = ['Nome', 'Ruolo', 'Telefono', 'Paga/Ora', 'Check-in', 'Check-out', 'Ore', 'Costo'];
+                const rows = staff.map(s => {
+                    let hours = 0;
+                    if (s.checkInTime) {
+                        const checkIn = new Date(s.checkInTime);
+                        const checkOut = s.checkOutTime ? new Date(s.checkOutTime) : new Date();
+                        hours = (checkOut - checkIn) / (1000 * 60 * 60);
+                    }
+                    return [
+                        s.name,
+                        s.role,
+                        s.phone || '-',
+                        s.hourlyRate || 0,
+                        s.checkInTime ? new Date(s.checkInTime).toLocaleTimeString('it-IT') : '-',
+                        s.checkOutTime ? new Date(s.checkOutTime).toLocaleTimeString('it-IT') : '-',
+                        hours.toFixed(2),
+                        (hours * (s.hourlyRate || 0)).toFixed(2)
+                    ];
+                });
+                downloadCSV([headers, ...rows], `staff_${currentEvent.name}_${new Date().toISOString().split('T')[0]}.csv`);
+            };
+
+            const exportFullReportCSV = () => {
+                const date = new Date().toISOString().split('T')[0];
+                const eventName = currentEvent.name;
+                
+                // Summary section
+                const summaryRows = [
+                    ['REPORT SERATA'],
+                    ['Evento', eventName],
+                    ['Data', new Date(currentEvent.date).toLocaleDateString('it-IT')],
+                    ['Location', currentEvent.venue],
+                    [''],
+                    ['RIEPILOGO'],
+                    ['Totale Fatturato', `€${getTotalRevenue().toFixed(2)}`],
+                    ['Ordini Totali', orders.length],
+                    ['Tavoli Prenotati', bookings.length],
+                    ['Staff Impiegato', staff.length],
+                    [''],
+                ];
+
+                // Orders by table
+                const orderRows = [['ORDINI PER TAVOLO'], ['Tavolo', 'Ospite', 'Ordini', 'Totale']];
+                tables.forEach(t => {
+                    const tableOrders = getTableOrders(t.id);
+                    const booking = bookings.find(b => b.tableId === t.id);
+                    if (tableOrders.length > 0) {
+                        orderRows.push([
+                            t.number,
+                            booking?.guestName || '-',
+                            tableOrders.length,
+                            `€${getTableTotal(t.id).toFixed(2)}`
+                        ]);
+                    }
+                });
+                orderRows.push(['']);
+
+                // Inventory
+                const bottlesUsed = calculateBottlesUsed();
+                const invRows = [['INVENTARIO'], ['Prodotto', 'Iniziale', 'Consumato', 'Rimanente']];
+                inventory.forEach(i => {
+                    const fromOrders = bottlesUsed[i.name] || 0;
+                    const consumed = fromOrders + (i.manualConsumption || 0);
+                    invRows.push([i.name, i.initialStock, consumed, i.initialStock - consumed]);
+                });
+                invRows.push(['']);
+
+                // Staff
+                const staffRows = [['STAFF'], ['Nome', 'Ruolo', 'Ore', 'Costo']];
+                staff.forEach(s => {
+                    let hours = 0;
+                    if (s.checkInTime) {
+                        const checkIn = new Date(s.checkInTime);
+                        const checkOut = s.checkOutTime ? new Date(s.checkOutTime) : new Date();
+                        hours = (checkOut - checkIn) / (1000 * 60 * 60);
+                    }
+                    staffRows.push([s.name, s.role, hours.toFixed(2), `€${(hours * (s.hourlyRate || 0)).toFixed(2)}`]);
+                });
+
+                downloadCSV([...summaryRows, ...orderRows, ...invRows, ...staffRows], `report_completo_${eventName}_${date}.csv`);
+            };
+
+            const downloadCSV = (rows, filename) => {
+                const csvContent = rows.map(r => r.map(cell => `"${cell}"`).join(',')).join('\n');
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.click();
+                URL.revokeObjectURL(url);
+            };
+
             const clearWaiterCall = async (callId) => {
                 try {
-                    const callsResult = await window.storage.get(`muse-waiter-calls-${currentEvent.id}`, true);
-                    if (callsResult) {
-                        let allCalls = JSON.parse(callsResult.value);
-                        allCalls = allCalls.map(c => 
-                            c.id === callId ? { ...c, status: 'completed' } : c
-                        );
-                        await window.storage.set(`muse-waiter-calls-${currentEvent.id}`, JSON.stringify(allCalls), true);
-                        setWaiterCalls(waiterCalls.filter(c => c.id !== callId));
-                    }
+                    await db.collection('events').doc(currentEvent.id).collection('waiterCalls').doc(callId).update({
+                        status: 'completed',
+                        completedAt: new Date().toISOString()
+                    });
                 } catch (error) {
                     console.error('Error clearing call:', error);
                 }
             };
 
             // INVENTORY MANAGEMENT
-            const saveInventory = async (eventId, newInventory) => {
+            const saveInventoryItem = async (eventId, item) => {
                 try {
-                    await window.storage.set(`muse-inventory-${eventId}`, JSON.stringify(newInventory), true);
-                    setInventory(newInventory);
+                    await db.collection('events').doc(eventId).collection('inventory').doc(item.id).set(item);
                 } catch (error) {
-                    console.error('Error saving inventory:', error);
+                    console.error('Error saving inventory item:', error);
                 }
             };
 
@@ -471,19 +757,23 @@
                     manualConsumption: 0,
                     createdAt: new Date().toISOString()
                 };
-                await saveInventory(currentEvent.id, [...inventory, newItem]);
+                await saveInventoryItem(currentEvent.id, newItem);
             };
 
             const updateInventoryItem = async (itemId, updates) => {
-                const newInventory = inventory.map(i =>
-                    i.id === itemId ? { ...i, ...updates } : i
-                );
-                await saveInventory(currentEvent.id, newInventory);
+                try {
+                    await db.collection('events').doc(currentEvent.id).collection('inventory').doc(itemId).update(updates);
+                } catch (error) {
+                    console.error('Error updating inventory:', error);
+                }
             };
 
             const removeInventoryItem = async (itemId) => {
-                const newInventory = inventory.filter(i => i.id !== itemId);
-                await saveInventory(currentEvent.id, newInventory);
+                try {
+                    await db.collection('events').doc(currentEvent.id).collection('inventory').doc(itemId).delete();
+                } catch (error) {
+                    console.error('Error deleting inventory item:', error);
+                }
             };
 
             const calculateBottlesUsed = () => {
@@ -508,28 +798,27 @@
             const finalizeInventory = async () => {
                 const bottlesUsed = calculateBottlesUsed();
                 
-                const newInventory = inventory.map(item => {
+                // Update each inventory item in Firebase
+                for (const item of inventory) {
                     const bottlesFromOrders = bottlesUsed[item.name] || 0;
                     const totalUsed = bottlesFromOrders + (item.manualConsumption || 0);
-                    return {
-                        ...item,
+                    await updateInventoryItem(item.id, {
                         currentStock: item.initialStock - totalUsed,
                         bottlesFromOrders,
-                        totalUsed
-                    };
-                });
+                        totalUsed,
+                        finalizedAt: new Date().toISOString()
+                    });
+                }
 
-                await saveInventory(currentEvent.id, newInventory);
                 alert(`Inventario aggiornato!\n\nBottiglie consumate dai tavoli: ${Object.values(bottlesUsed).reduce((a,b) => a+b, 0)}`);
             };
 
             // STAFF MANAGEMENT
-            const saveStaff = async (eventId, newStaff) => {
+            const saveStaffMember = async (eventId, member) => {
                 try {
-                    await window.storage.set(`muse-staff-${eventId}`, JSON.stringify(newStaff), true);
-                    setStaff(newStaff);
+                    await db.collection('events').doc(eventId).collection('staff').doc(member.id).set(member);
                 } catch (error) {
-                    console.error('Error saving staff:', error);
+                    console.error('Error saving staff member:', error);
                 }
             };
 
@@ -542,27 +831,31 @@
                     checkOutTime: null,
                     createdAt: new Date().toISOString()
                 };
-                await saveStaff(currentEvent.id, [...staff, newMember]);
+                await saveStaffMember(currentEvent.id, newMember);
             };
 
             const toggleStaffStatus = async (staffId) => {
                 const now = new Date().toISOString();
-                const newStaff = staff.map(s => {
-                    if (s.id === staffId) {
-                        if (s.status === 'off-duty') {
-                            return { ...s, status: 'on-duty', checkInTime: now };
-                        } else {
-                            return { ...s, status: 'off-duty', checkOutTime: now };
-                        }
-                    }
-                    return s;
-                });
-                await saveStaff(currentEvent.id, newStaff);
+                const member = staff.find(s => s.id === staffId);
+                if (!member) return;
+                
+                const updates = member.status === 'off-duty'
+                    ? { status: 'on-duty', checkInTime: now }
+                    : { status: 'off-duty', checkOutTime: now };
+                
+                try {
+                    await db.collection('events').doc(currentEvent.id).collection('staff').doc(staffId).update(updates);
+                } catch (error) {
+                    console.error('Error toggling staff status:', error);
+                }
             };
 
             const removeStaffMember = async (staffId) => {
-                const newStaff = staff.filter(s => s.id !== staffId);
-                await saveStaff(currentEvent.id, newStaff);
+                try {
+                    await db.collection('events').doc(currentEvent.id).collection('staff').doc(staffId).delete();
+                } catch (error) {
+                    console.error('Error removing staff member:', error);
+                }
             };
 
             const createEvent = async (eventData) => {
@@ -571,33 +864,39 @@
                     ...eventData,
                     createdAt: new Date().toISOString()
                 };
-                const newEvents = [...events, newEvent];
-                await saveEvents(newEvents);
-                setShowNewEvent(false);
-                setCurrentEvent(newEvent);
+                try {
+                    await db.collection('events').doc(newEvent.id).set(newEvent);
+                    setShowNewEvent(false);
+                    setCurrentEvent(newEvent);
+                } catch (error) {
+                    console.error('Error creating event:', error);
+                }
             };
 
             const deleteEvent = async (eventId) => {
                 if (!confirm('Sei sicura di voler eliminare questa serata?')) return;
                 
-                const newEvents = events.filter(e => e.id !== eventId);
-                await saveEvents(newEvents);
-                
                 try {
-                    await window.storage.delete(`muse-tables-${eventId}`);
-                    await window.storage.delete(`muse-bookings-${eventId}`);
-                    await window.storage.delete(`muse-prs-${eventId}`);
-                    await window.storage.delete(`muse-guestlists-${eventId}`);
+                    // Delete all subcollections first
+                    const subcollections = ['tables', 'bookings', 'prs', 'guestLists', 'menu', 'orders', 'waiterCalls', 'inventory', 'staff'];
+                    for (const sub of subcollections) {
+                        const snapshot = await db.collection('events').doc(eventId).collection(sub).get();
+                        const batch = db.batch();
+                        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                        await batch.commit();
+                    }
+                    // Delete the event document
+                    await db.collection('events').doc(eventId).delete();
+                    
+                    if (currentEvent?.id === eventId) {
+                        setCurrentEvent(null);
+                    }
                 } catch (error) {
-                    console.log('Cleanup complete');
-                }
-                
-                if (currentEvent?.id === eventId) {
-                    setCurrentEvent(null);
+                    console.error('Error deleting event:', error);
                 }
             };
 
-            const addTable = () => {
+            const addTable = async () => {
                 const newTable = {
                     id: Date.now().toString(),
                     number: tables.length + 1,
@@ -608,22 +907,23 @@
                     capacity: 8,
                     shape: 'round'
                 };
-                saveTables(currentEvent.id, [...tables, newTable]);
+                await saveTable(currentEvent.id, newTable);
             };
 
-            const removeTable = (tableId) => {
-                const newTables = tables.filter(t => t.id !== tableId);
-                saveTables(currentEvent.id, newTables);
-                
-                const newBookings = bookings.filter(b => b.tableId !== tableId);
-                saveBookings(currentEvent.id, newBookings);
+            const removeTable = async (tableId) => {
+                await deleteTable(currentEvent.id, tableId);
+                // Also delete associated bookings
+                const tableBookings = bookings.filter(b => b.tableId === tableId);
+                for (const booking of tableBookings) {
+                    await deleteBooking(currentEvent.id, booking.id);
+                }
             };
 
-            const updateTable = (tableId, updates) => {
-                const newTables = tables.map(t => 
-                    t.id === tableId ? { ...t, ...updates } : t
-                );
-                saveTables(currentEvent.id, newTables);
+            const updateTable = async (tableId, updates) => {
+                const table = tables.find(t => t.id === tableId);
+                if (table) {
+                    await saveTable(currentEvent.id, { ...table, ...updates });
+                }
             };
 
             const handleTableDragStart = (e, table) => {
@@ -724,13 +1024,12 @@
                     status: 'confirmed',
                     createdAt: new Date().toISOString()
                 };
-                await saveBookings(currentEvent.id, [...bookings, newBooking]);
+                await saveBooking(currentEvent.id, newBooking);
                 setSelectedTable(null);
             };
 
-            const removeBooking = async (bookingId) => {
-                const newBookings = bookings.filter(b => b.id !== bookingId);
-                await saveBookings(currentEvent.id, newBookings);
+            const removeBookingById = async (bookingId) => {
+                await deleteBooking(currentEvent.id, bookingId);
             };
 
             const addPr = async (prData) => {
@@ -739,22 +1038,27 @@
                     ...prData,
                     createdAt: new Date().toISOString()
                 };
-                await savePrs(currentEvent.id, [...prs, newPr]);
+                await savePr(currentEvent.id, newPr);
                 setShowNewPr(false);
             };
 
             const removePr = async (prId) => {
                 if (!confirm('Eliminare questo PR? Verranno rimosse anche le sue liste.')) return;
-                const newPrs = prs.filter(p => p.id !== prId);
-                await savePrs(currentEvent.id, newPrs);
                 
-                const newGuestLists = guestLists.filter(g => g.prId !== prId);
-                await saveGuestLists(currentEvent.id, newGuestLists);
+                // Delete PR
+                await deletePr(currentEvent.id, prId);
                 
-                const newBookings = bookings.map(b => 
-                    b.prId === prId ? { ...b, prId: null, prName: null } : b
-                );
-                await saveBookings(currentEvent.id, newBookings);
+                // Delete associated guests
+                const prGuests = guestLists.filter(g => g.prId === prId);
+                for (const guest of prGuests) {
+                    await deleteGuest(currentEvent.id, guest.id);
+                }
+                
+                // Update associated bookings to remove PR reference
+                const prBookings = bookings.filter(b => b.prId === prId);
+                for (const booking of prBookings) {
+                    await saveBooking(currentEvent.id, { ...booking, prId: null, prName: null });
+                }
             };
 
             const addGuestToList = async (prId, guestData) => {
@@ -765,29 +1069,26 @@
                     checkedIn: false,
                     createdAt: new Date().toISOString()
                 };
-                await saveGuestLists(currentEvent.id, [...guestLists, newGuest]);
+                await saveGuest(currentEvent.id, newGuest);
             };
 
             const importGuestsBatch = async (prId, guestsText) => {
                 const lines = guestsText.split('\n').filter(line => line.trim());
-                const newGuests = [];
+                let importedCount = 0;
                 
-                lines.forEach(line => {
-                    line = line.trim();
-                    if (!line) return;
+                for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    if (!trimmedLine) continue;
                     
-                    // Try to parse formats like "Name - 3", "Name (3)", or just "Name"
-                    let guestName = line;
+                    let guestName = trimmedLine;
                     let guestCount = 1;
                     
-                    // Match "Name - 3" or "Name -3"
-                    const dashMatch = line.match(/^(.+?)\s*-\s*(\d+)$/);
+                    const dashMatch = trimmedLine.match(/^(.+?)\s*-\s*(\d+)$/);
                     if (dashMatch) {
                         guestName = dashMatch[1].trim();
                         guestCount = parseInt(dashMatch[2]);
                     } else {
-                        // Match "Name (3)" or "Name(3)"
-                        const parenMatch = line.match(/^(.+?)\s*\((\d+)\)$/);
+                        const parenMatch = trimmedLine.match(/^(.+?)\s*\((\d+)\)$/);
                         if (parenMatch) {
                             guestName = parenMatch[1].trim();
                             guestCount = parseInt(parenMatch[2]);
@@ -795,34 +1096,31 @@
                     }
                     
                     if (guestName) {
-                        newGuests.push({
-                            id: `${Date.now()}-${Math.random()}`,
+                        const newGuest = {
+                            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                             prId,
                             guestName,
                             guestCount,
                             checkedIn: false,
                             createdAt: new Date().toISOString()
-                        });
+                        };
+                        await saveGuest(currentEvent.id, newGuest);
+                        importedCount++;
                     }
-                });
-                
-                if (newGuests.length > 0) {
-                    await saveGuestLists(currentEvent.id, [...guestLists, ...newGuests]);
                 }
                 
-                return newGuests.length;
+                return importedCount;
             };
 
             const toggleGuestCheckIn = async (guestId) => {
-                const newGuestLists = guestLists.map(g =>
-                    g.id === guestId ? { ...g, checkedIn: !g.checkedIn } : g
-                );
-                await saveGuestLists(currentEvent.id, newGuestLists);
+                const guest = guestLists.find(g => g.id === guestId);
+                if (guest) {
+                    await saveGuest(currentEvent.id, { ...guest, checkedIn: !guest.checkedIn });
+                }
             };
 
-            const removeGuest = async (guestId) => {
-                const newGuestLists = guestLists.filter(g => g.id !== guestId);
-                await saveGuestLists(currentEvent.id, newGuestLists);
+            const removeGuestFromList = async (guestId) => {
+                await deleteGuest(currentEvent.id, guestId);
             };
 
             const getPrStats = (prId) => {
@@ -1799,7 +2097,7 @@
                                                                         {guest.checkedIn ? '✓' : 'Check-in'}
                                                                     </button>
                                                                     <button
-                                                                        onClick={() => removeGuest(guest.id)}
+                                                                        onClick={() => removeGuestFromList(guest.id)}
                                                                         className="text-red-400 hover:text-red-300"
                                                                     >
                                                                         <X size={16} />
@@ -1952,7 +2250,7 @@
                                                             <p className="text-purple-300 text-sm">Tavolo {table?.number}</p>
                                                         </div>
                                                         <button
-                                                            onClick={() => removeBooking(booking.id)}
+                                                            onClick={() => removeBookingById(booking.id)}
                                                             className="text-red-400 hover:text-red-300"
                                                         >
                                                             <Trash2 size={16} />
@@ -2175,6 +2473,206 @@
                                     Importa Lista
                                 </button>
                             </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const DeleteConfirmModal = ({ item, onClose, onConfirm }) => {
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-red-500/30 rounded-xl p-6 max-w-md w-full">
+                        <div className="text-center mb-6">
+                            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Trash2 size={32} className="text-red-400" />
+                            </div>
+                            <h2 className="text-xl font-bold text-white mb-2">Conferma Eliminazione</h2>
+                            <p className="text-purple-300">
+                                Sei sicura di voler eliminare <span className="text-white font-bold">"{item.name}"</span>?
+                            </p>
+                            <p className="text-red-400 text-sm mt-2">Questa azione non può essere annullata.</p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={onClose}
+                                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg transition-all"
+                            >
+                                Annulla
+                            </button>
+                            <button
+                                onClick={() => {
+                                    onConfirm(item.type, item.id);
+                                    onClose();
+                                }}
+                                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg transition-all font-bold"
+                            >
+                                Elimina
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const AddMenuItemModal = ({ inventory, onClose, onAdd }) => {
+            const [mode, setMode] = useState('inventory'); // 'inventory' | 'manual'
+            const [selectedInventoryId, setSelectedInventoryId] = useState('');
+            const [customPrice, setCustomPrice] = useState('');
+            const [manualName, setManualName] = useState('');
+            const [manualCategory, setManualCategory] = useState('');
+            const [manualPrice, setManualPrice] = useState('');
+
+            const selectedItem = inventory.find(i => i.id === selectedInventoryId);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (mode === 'inventory') {
+                    if (!selectedInventoryId || !customPrice) return;
+                    onAdd({
+                        name: selectedItem.name,
+                        category: selectedItem.category,
+                        price: parseFloat(customPrice),
+                        inventoryId: selectedInventoryId
+                    });
+                } else {
+                    if (!manualName || !manualCategory || !manualPrice) return;
+                    onAdd({
+                        name: manualName,
+                        category: manualCategory,
+                        price: parseFloat(manualPrice)
+                    });
+                }
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 border border-purple-500/30 rounded-xl p-6 max-w-md w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-white">Aggiungi al Menu</h2>
+                            <button onClick={onClose} className="text-purple-300 hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Mode Toggle */}
+                        <div className="flex gap-2 mb-6">
+                            <button
+                                type="button"
+                                onClick={() => setMode('inventory')}
+                                className={`flex-1 py-2 rounded-lg font-medium transition-all ${
+                                    mode === 'inventory' 
+                                        ? 'bg-amber-500 text-white' 
+                                        : 'bg-slate-700 text-purple-300'
+                                }`}
+                            >
+                                📦 Da Magazzino
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMode('manual')}
+                                className={`flex-1 py-2 rounded-lg font-medium transition-all ${
+                                    mode === 'manual' 
+                                        ? 'bg-purple-500 text-white' 
+                                        : 'bg-slate-700 text-purple-300'
+                                }`}
+                            >
+                                ✏️ Manuale
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            {mode === 'inventory' ? (
+                                <>
+                                    <div>
+                                        <label className="block text-purple-300 mb-2">Prodotto dal Magazzino</label>
+                                        <select
+                                            value={selectedInventoryId}
+                                            onChange={(e) => {
+                                                setSelectedInventoryId(e.target.value);
+                                                const item = inventory.find(i => i.id === e.target.value);
+                                                if (item) setCustomPrice(item.unitPrice.toString());
+                                            }}
+                                            className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                            required
+                                        >
+                                            <option value="">Seleziona prodotto...</option>
+                                            {inventory.map(item => (
+                                                <option key={item.id} value={item.id}>
+                                                    {item.name} ({item.category}) - {item.currentStock || item.initialStock} disponibili
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {selectedItem && (
+                                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                                            <div className="text-amber-300 text-sm">
+                                                <span className="font-bold">{selectedItem.name}</span>
+                                                <span className="ml-2">• Stock: {selectedItem.currentStock || selectedItem.initialStock}</span>
+                                                <span className="ml-2">• Costo: €{selectedItem.unitPrice}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <label className="block text-purple-300 mb-2">Prezzo di Vendita €</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={customPrice}
+                                            onChange={(e) => setCustomPrice(e.target.value)}
+                                            className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                            placeholder="Es: 150.00"
+                                            required
+                                        />
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <label className="block text-purple-300 mb-2">Nome Prodotto</label>
+                                        <input
+                                            type="text"
+                                            value={manualName}
+                                            onChange={(e) => setManualName(e.target.value)}
+                                            className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                            placeholder="Es: Mojito"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-purple-300 mb-2">Categoria</label>
+                                        <input
+                                            type="text"
+                                            value={manualCategory}
+                                            onChange={(e) => setManualCategory(e.target.value)}
+                                            className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                            placeholder="Es: Cocktail"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-purple-300 mb-2">Prezzo €</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={manualPrice}
+                                            onChange={(e) => setManualPrice(e.target.value)}
+                                            className="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-400"
+                                            placeholder="Es: 12.00"
+                                            required
+                                        />
+                                    </div>
+                                </>
+                            )}
+                            <button
+                                type="submit"
+                                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white py-3 rounded-lg transition-all font-bold"
+                            >
+                                Aggiungi al Menu
+                            </button>
                         </form>
                     </div>
                 </div>
