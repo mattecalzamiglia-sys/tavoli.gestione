@@ -3,24 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@_muse.in_ - Staff</title>
+    <title>@_muse.in_ - Gestione Tavoli</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
-        @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
-        .call-pulse { position: relative; }
-        .call-pulse::before { content: ''; position: absolute; inset: -8px; border-radius: 12px; border: 2px solid #f97316; animation: pulse-ring 1.5s infinite; }
-        #qr-reader { width: 100%; }
-        #qr-reader video { width: 100% !important; border-radius: 12px; }
+        body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(100,100,100,0.1); }
+        ::-webkit-scrollbar-thumb { background: rgba(168,85,247,0.5); border-radius: 4px; }
     </style>
 </head>
 <body>
     <div id="root"></div>
     <script>
+        // Firebase init
         firebase.initializeApp({
             apiKey: "AIzaSyA-m6tX87TZtqTDg2kuE04zDvxkJ_vH2Yg",
             authDomain: "gestionale-discoteche-2026.firebaseapp.com",
@@ -29,489 +28,750 @@
             messagingSenderId: "299126578946",
             appId: "1:299126578946:web:2609823671a0eed056ac1b"
         });
-        var db = firebase.firestore();
-        var useState = React.useState;
-        var useEffect = React.useEffect;
-        var useRef = React.useRef;
-        var h = React.createElement;
+        const db = firebase.firestore();
+
+        const { useState, useEffect, useRef } = React;
+        const h = React.createElement;
+
+        // Icons as functions
+        const Icon = (path, size=24) => h('svg', {xmlns:'http://www.w3.org/2000/svg',width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'}, h('path',{d:path}));
+        const PlusIcon = (s) => h('svg',{xmlns:'http://www.w3.org/2000/svg',width:s||24,height:s||24,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},h('path',{d:'M5 12h14'}),h('path',{d:'M12 5v14'}));
+        const UsersIcon = (s) => h('svg',{xmlns:'http://www.w3.org/2000/svg',width:s||24,height:s||24,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},h('path',{d:'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'}),h('circle',{cx:9,cy:7,r:4}),h('path',{d:'M22 21v-2a4 4 0 0 0-3-3.87'}),h('path',{d:'M16 3.13a4 4 0 0 1 0 7.75'}));
+        const XIcon = (s) => h('svg',{xmlns:'http://www.w3.org/2000/svg',width:s||24,height:s||24,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},h('path',{d:'M18 6 6 18'}),h('path',{d:'M6 6l12 12'}));
+        const TrashIcon = (s) => h('svg',{xmlns:'http://www.w3.org/2000/svg',width:s||24,height:s||24,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},h('path',{d:'M3 6h18'}),h('path',{d:'M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'}),h('path',{d:'M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'}));
+        const ChevronLeftIcon = (s) => h('svg',{xmlns:'http://www.w3.org/2000/svg',width:s||24,height:s||24,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:2},h('path',{d:'m15 18-6-6 6-6'}));
 
         function App() {
-            var _s1 = useState(null), event = _s1[0], setEvent = _s1[1];
-            var _s2 = useState(null), currentStaff = _s2[0], setCurrentStaff = _s2[1];
-            var _s3 = useState([]), tables = _s3[0], setTables = _s3[1];
-            var _s4 = useState([]), orders = _s4[0], setOrders = _s4[1];
-            var _s5 = useState([]), calls = _s5[0], setCalls = _s5[1];
-            var _s6 = useState([]), bookings = _s6[0], setBookings = _s6[1];
-            var _s7 = useState(true), loading = _s7[0], setLoading = _s7[1];
-            var _s8 = useState(null), error = _s8[0], setError = _s8[1];
-            var _s9 = useState('status'), tab = _s9[0], setTab = _s9[1];
-            var _s10 = useState(false), showScanner = _s10[0], setShowScanner = _s10[1];
-            var _s11 = useState(null), scanResult = _s11[0], setScanResult = _s11[1];
-            var unsubs = useRef([]);
-            var scannerRef = useRef(null);
+            const [events, setEvents] = useState([]);
+            const [currentEvent, setCurrentEvent] = useState(null);
+            const [tables, setTables] = useState([]);
+            const [bookings, setBookings] = useState([]);
+            const [prs, setPrs] = useState([]);
+            const [guestLists, setGuestLists] = useState([]);
+            const [menu, setMenu] = useState([]);
+            const [orders, setOrders] = useState([]);
+            const [waiterCalls, setWaiterCalls] = useState([]);
+            const [inventory, setInventory] = useState([]);
+            const [staff, setStaff] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [view, setView] = useState('tables'); // tables, prs, orders, inventory, staff
+            const [showNewEvent, setShowNewEvent] = useState(false);
+            const [showNewPr, setShowNewPr] = useState(false);
+            const [selectedPr, setSelectedPr] = useState(null);
+            const [selectedTable, setSelectedTable] = useState(null);
+            const [editMode, setEditMode] = useState(false);
+            const unsubs = useRef([]);
 
-            // Check if staff is a waiter (cameriere)
-            var isWaiter = currentStaff && (
-                currentStaff.role.toLowerCase() === 'cameriere' || 
-                currentStaff.role.toLowerCase() === 'cameriera' ||
-                currentStaff.role.toLowerCase() === 'waiter' ||
-                currentStaff.role.toLowerCase() === 'waitress'
-            );
-
-            useEffect(function() {
-                var params = new URLSearchParams(window.location.search);
-                var eventId = params.get('event');
-                var staffId = params.get('staff');
-                
-                if (!eventId || !staffId) { 
-                    setError('Link non valido.'); 
-                    setLoading(false); 
-                    return; 
-                }
-
-                (async function() {
-                    try {
-                        // Load event
-                        var eventDoc = await db.collection('events').doc(eventId).get();
-                        if (!eventDoc.exists) { 
-                            setError('Evento non trovato.'); 
-                            setLoading(false); 
-                            return; 
-                        }
-                        setEvent({ id: eventDoc.id, ...eventDoc.data() });
-
-                        // Load staff member
-                        var staffDoc = await db.collection('events').doc(eventId).collection('staff').doc(staffId).get();
-                        if (!staffDoc.exists) { 
-                            setError('Staff non trovato.'); 
-                            setLoading(false); 
-                            return; 
-                        }
-                        setCurrentStaff({ id: staffDoc.id, ...staffDoc.data() });
-
-                        // Real-time listeners (needed for waiters)
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('tables').onSnapshot(function(s) {
-                            setTables(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
-                        }));
-                        
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('bookings').onSnapshot(function(s) {
-                            setBookings(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
-                        }));
-                        
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('orders').onSnapshot(function(s) {
-                            setOrders(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
-                        }));
-                        
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('waiterCalls').where('status', '==', 'pending').onSnapshot(function(s) {
-                            setCalls(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
-                        }));
-
-                        // Listen for staff updates (for check-in status)
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('staff').doc(staffId).onSnapshot(function(doc) {
-                            if (doc.exists) {
-                                setCurrentStaff({ id: doc.id, ...doc.data() });
-                            }
-                        }));
-
-                        setLoading(false);
-                    } catch(e) { 
-                        console.error(e);
-                        setError('Errore caricamento.'); 
-                        setLoading(false); 
-                    }
-                })();
-                
-                return function() { 
-                    unsubs.current.forEach(function(u) { u(); }); 
-                };
+            // Load events on mount
+            useEffect(() => {
+                const unsub = db.collection('events').onSnapshot(snap => {
+                    setEvents(snap.docs.map(d => ({id: d.id, ...d.data()})));
+                    setLoading(false);
+                });
+                return () => unsub();
             }, []);
 
-            // Handle QR scan
-            var handleQrScan = async function(decodedText) {
-                try {
-                    var data = JSON.parse(decodedText);
-                    
-                    if (data.type === 'event-checkin' && data.eventId) {
-                        var params = new URLSearchParams(window.location.search);
-                        var currentEventId = params.get('event');
-                        
-                        if (data.eventId !== currentEventId) {
-                            setScanResult({ success: false, message: 'QR di un evento diverso!' });
-                            return;
-                        }
+            // Setup listeners when event selected
+            useEffect(() => {
+                if (!currentEvent) return;
+                unsubs.current.forEach(u => u());
+                unsubs.current = [];
 
-                        // Toggle check-in/out
-                        var now = new Date().toISOString();
-                        var isCheckingIn = currentStaff.status === 'off-duty' || !currentStaff.status;
+                const eid = currentEvent.id;
+                unsubs.current.push(db.collection('events').doc(eid).collection('tables').onSnapshot(s => setTables(s.docs.map(d => ({id:d.id,...d.data()})))));
+                unsubs.current.push(db.collection('events').doc(eid).collection('bookings').onSnapshot(s => setBookings(s.docs.map(d => ({id:d.id,...d.data()})))));
+                unsubs.current.push(db.collection('events').doc(eid).collection('prs').onSnapshot(s => setPrs(s.docs.map(d => ({id:d.id,...d.data()})))));
+                unsubs.current.push(db.collection('events').doc(eid).collection('guestLists').onSnapshot(s => setGuestLists(s.docs.map(d => ({id:d.id,...d.data()})))));
+                unsubs.current.push(db.collection('events').doc(eid).collection('menu').onSnapshot(s => setMenu(s.docs.map(d => ({id:d.id,...d.data()})))));
+                unsubs.current.push(db.collection('events').doc(eid).collection('orders').onSnapshot(s => setOrders(s.docs.map(d => ({id:d.id,...d.data()})))));
+                unsubs.current.push(db.collection('events').doc(eid).collection('waiterCalls').where('status','==','pending').onSnapshot(s => setWaiterCalls(s.docs.map(d => ({id:d.id,...d.data()})))));
+                unsubs.current.push(db.collection('events').doc(eid).collection('inventory').onSnapshot(s => setInventory(s.docs.map(d => ({id:d.id,...d.data()})))));
+                unsubs.current.push(db.collection('events').doc(eid).collection('staff').onSnapshot(s => setStaff(s.docs.map(d => ({id:d.id,...d.data()})))));
 
-                        await db.collection('events').doc(currentEventId).collection('staff').doc(currentStaff.id).update(
-                            isCheckingIn 
-                                ? { status: 'on-duty', checkInTime: now }
-                                : { status: 'off-duty', checkOutTime: now }
-                        );
+                return () => unsubs.current.forEach(u => u());
+            }, [currentEvent]);
 
-                        setScanResult({ 
-                            success: true, 
-                            message: isCheckingIn ? 'CHECK-IN ✓' : 'CHECK-OUT ✓',
-                            action: isCheckingIn ? 'check-in' : 'check-out'
-                        });
+            // Event functions
+            const createEvent = async (name, date, venue) => {
+                const id = Date.now().toString();
+                await db.collection('events').doc(id).set({name, date, venue, createdAt: new Date().toISOString()});
+                setCurrentEvent({id, name, date, venue});
+                setShowNewEvent(false);
+            };
 
-                        // Stop scanner and close after 2 seconds
-                        if (scannerRef.current) {
-                            scannerRef.current.stop().catch(function() {});
-                            scannerRef.current = null;
-                        }
-                        setTimeout(function() {
-                            setShowScanner(false);
-                            setScanResult(null);
-                        }, 2000);
-                    } else {
-                        setScanResult({ success: false, message: 'QR non valido' });
-                    }
-                } catch(e) {
-                    console.error(e);
-                    setScanResult({ success: false, message: 'Errore lettura QR' });
+            const deleteEvent = async (eid) => {
+                if (!confirm('Eliminare questa serata?')) return;
+                await db.collection('events').doc(eid).delete();
+                if (currentEvent?.id === eid) setCurrentEvent(null);
+            };
+
+            // Table functions
+            const addTable = async () => {
+                const id = Date.now().toString();
+                const table = {number: tables.length + 1, x: 100, y: 100, width: 80, height: 80, capacity: 8, shape: 'round'};
+                await db.collection('events').doc(currentEvent.id).collection('tables').doc(id).set(table);
+            };
+
+            const updateTable = async (tid, data) => {
+                await db.collection('events').doc(currentEvent.id).collection('tables').doc(tid).update(data);
+            };
+
+            const deleteTable = async (tid) => {
+                await db.collection('events').doc(currentEvent.id).collection('tables').doc(tid).delete();
+            };
+
+            // Booking functions
+            const addBooking = async (tableId, data) => {
+                const id = Date.now().toString();
+                await db.collection('events').doc(currentEvent.id).collection('bookings').doc(id).set({
+                    tableId, ...data, status: 'confirmed', createdAt: new Date().toISOString()
+                });
+            };
+
+            const deleteBooking = async (bid) => {
+                await db.collection('events').doc(currentEvent.id).collection('bookings').doc(bid).delete();
+            };
+
+            // PR functions
+            const addPr = async (name, phone) => {
+                const id = Date.now().toString();
+                await db.collection('events').doc(currentEvent.id).collection('prs').doc(id).set({name, phone, createdAt: new Date().toISOString()});
+                setShowNewPr(false);
+            };
+
+            const deletePr = async (pid) => {
+                if (!confirm('Eliminare questo PR?')) return;
+                await db.collection('events').doc(currentEvent.id).collection('prs').doc(pid).delete();
+                // Delete associated guests
+                const guests = guestLists.filter(g => g.prId === pid);
+                for (const g of guests) {
+                    await db.collection('events').doc(currentEvent.id).collection('guestLists').doc(g.id).delete();
                 }
             };
 
-            // Start QR scanner
-            useEffect(function() {
-                if (showScanner && !scannerRef.current) {
-                    setTimeout(function() {
-                        try {
-                            scannerRef.current = new Html5Qrcode("qr-reader");
-                            scannerRef.current.start(
-                                { facingMode: "environment" },
-                                { fps: 10, qrbox: { width: 250, height: 250 } },
-                                handleQrScan,
-                                function(err) { /* ignore */ }
-                            ).catch(function(err) {
-                                console.error("Scanner error:", err);
-                                setScanResult({ success: false, message: 'Impossibile accedere alla fotocamera' });
-                            });
-                        } catch(e) {
-                            console.error("Scanner init error:", e);
-                        }
-                    }, 100);
-                }
+            // Guest functions
+            const addGuest = async (prId, guestName, guestCount) => {
+                const id = Date.now().toString();
+                await db.collection('events').doc(currentEvent.id).collection('guestLists').doc(id).set({
+                    prId, guestName, guestCount: guestCount || 1, checkedIn: false, createdAt: new Date().toISOString()
+                });
+            };
 
-                return function() {
-                    if (scannerRef.current) {
-                        scannerRef.current.stop().catch(function() {});
-                        scannerRef.current = null;
-                    }
+            const toggleGuestCheckIn = async (gid, current) => {
+                await db.collection('events').doc(currentEvent.id).collection('guestLists').doc(gid).update({checkedIn: !current});
+            };
+
+            const deleteGuest = async (gid) => {
+                await db.collection('events').doc(currentEvent.id).collection('guestLists').doc(gid).delete();
+            };
+
+            // Menu functions
+            const addMenuItem = async (name, category, price) => {
+                const id = Date.now().toString();
+                await db.collection('events').doc(currentEvent.id).collection('menu').doc(id).set({name, category, price, createdAt: new Date().toISOString()});
+            };
+
+            const deleteMenuItem = async (mid) => {
+                await db.collection('events').doc(currentEvent.id).collection('menu').doc(mid).delete();
+            };
+
+            // Waiter call functions
+            const clearWaiterCall = async (cid) => {
+                await db.collection('events').doc(currentEvent.id).collection('waiterCalls').doc(cid).update({status: 'completed'});
+            };
+
+            // Inventory functions
+            const addInventoryItem = async (name, category, quantity, unitPrice) => {
+                const id = Date.now().toString();
+                await db.collection('events').doc(currentEvent.id).collection('inventory').doc(id).set({
+                    name, category, quantity, unitPrice, initialStock: quantity, currentStock: quantity, manualConsumption: 0, createdAt: new Date().toISOString()
+                });
+            };
+
+            const updateInventoryItem = async (iid, data) => {
+                await db.collection('events').doc(currentEvent.id).collection('inventory').doc(iid).update(data);
+            };
+
+            const deleteInventoryItem = async (iid) => {
+                await db.collection('events').doc(currentEvent.id).collection('inventory').doc(iid).delete();
+            };
+
+            // Staff functions
+            const addStaffMember = async (name, role, phone, hourlyRate) => {
+                const id = Date.now().toString();
+                await db.collection('events').doc(currentEvent.id).collection('staff').doc(id).set({
+                    name, role, phone, hourlyRate: hourlyRate || 0, status: 'off-duty', checkInTime: null, checkOutTime: null, createdAt: new Date().toISOString()
+                });
+            };
+
+            const toggleStaffStatus = async (sid, current) => {
+                const now = new Date().toISOString();
+                const update = current === 'off-duty' ? {status: 'on-duty', checkInTime: now} : {status: 'off-duty', checkOutTime: now};
+                await db.collection('events').doc(currentEvent.id).collection('staff').doc(sid).update(update);
+            };
+
+            const deleteStaffMember = async (sid) => {
+                await db.collection('events').doc(currentEvent.id).collection('staff').doc(sid).delete();
+            };
+
+            // Helper functions
+            const getTableBooking = (tid) => bookings.find(b => b.tableId === tid);
+            const getTableOrders = (tid) => orders.filter(o => o.tableId === tid);
+            const getTableTotal = (tid) => getTableOrders(tid).reduce((s,o) => s + (o.total||0), 0);
+            const getTotalRevenue = () => orders.reduce((s,o) => s + (o.total||0), 0);
+            const getPrStats = (pid) => {
+                const prGuests = guestLists.filter(g => g.prId === pid);
+                const prBookings = bookings.filter(b => b.prId === pid);
+                return {
+                    guestListCount: prGuests.reduce((s,g) => s + (g.guestCount||1), 0),
+                    checkedInCount: prGuests.filter(g => g.checkedIn).length,
+                    tableBookings: prBookings.length
                 };
-            }, [showScanner, currentStaff]);
-
-            // Clear waiter call
-            var clearCall = async function(cid) {
-                var params = new URLSearchParams(window.location.search);
-                var eventId = params.get('event');
-                await db.collection('events').doc(eventId).collection('waiterCalls').doc(cid).update({
-                    status: 'completed',
-                    completedAt: new Date().toISOString()
-                });
             };
 
-            // Update order status
-            var updateOrderStatus = async function(orderId, newStatus) {
-                var params = new URLSearchParams(window.location.search);
-                var eventId = params.get('event');
-                await db.collection('events').doc(eventId).collection('orders').doc(orderId).update({
-                    status: newStatus,
-                    updatedAt: new Date().toISOString()
-                });
-            };
-
-            var timeSince = function(date) { 
-                var d = Math.floor((new Date() - new Date(date)) / 1000 / 60); 
-                return d < 1 ? 'Ora' : d < 60 ? d + 'm fa' : Math.floor(d/60) + 'h ' + (d % 60) + 'm'; 
-            };
-
-            var getWorkedHours = function() {
-                if (!currentStaff || !currentStaff.checkInTime) return 0;
-                var checkIn = new Date(currentStaff.checkInTime);
-                var checkOut = currentStaff.checkOutTime && currentStaff.status === 'off-duty' ? new Date(currentStaff.checkOutTime) : new Date();
-                return ((checkOut - checkIn) / (1000 * 60 * 60)).toFixed(1);
-            };
-
+            // Loading screen
             if (loading) {
                 return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center'},
-                    h('div', {className: 'animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500'})
-                );
-            }
-
-            if (error) {
-                return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4'},
-                    h('div', {className: 'bg-red-500/20 border border-red-500/40 rounded-xl p-8 text-center'},
-                        h('div', {className: 'text-6xl mb-4'}, '⚠️'),
-                        h('p', {className: 'text-red-300'}, error)
+                    h('div', {className: 'text-center'},
+                        h('div', {className: 'animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500 mx-auto mb-4'}),
+                        h('p', {className: 'text-purple-300'}, 'Caricamento...')
                     )
                 );
             }
 
-            var isOnDuty = currentStaff.status === 'on-duty';
-            var pendingOrders = orders.filter(function(o) { return o.status === 'pending' || !o.status; });
-            var preparingOrders = orders.filter(function(o) { return o.status === 'preparing'; });
-            var readyOrders = orders.filter(function(o) { return o.status === 'ready'; });
-
-            return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'},
-                // Header
-                h('header', {className: 'sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-purple-500/30 px-4 py-3 z-50'},
-                    h('div', {className: 'flex justify-between items-center mb-3'},
-                        h('div', {},
-                            h('h1', {className: 'text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400'}, currentStaff.name),
-                            h('p', {className: 'text-purple-300 text-xs'}, currentStaff.role, ' • ', event ? event.name : '')
-                        ),
-                        h('div', {className: 'flex items-center gap-2'},
-                            h('div', {className: isOnDuty ? 'text-green-400 text-xs' : 'text-slate-400 text-xs'}, isOnDuty ? '● In servizio' : '○ Fuori servizio')
-                        )
-                    ),
-                    // Tabs - different based on role
-                    isWaiter ? h('div', {className: 'flex gap-2'},
-                        h('button', {
-                            onClick: function() { setTab('status'); },
-                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'status' ? 'bg-purple-500 text-white' : 'bg-slate-800 text-purple-300')
-                        }, '👤 Stato'),
-                        h('button', {
-                            onClick: function() { setTab('orders'); },
-                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'orders' ? 'bg-pink-500 text-white' : 'bg-slate-800 text-purple-300')
-                        }, '🍾 Ordini ', pendingOrders.length > 0 ? h('span', {className: 'bg-white text-pink-600 text-xs px-2 rounded-full ml-1'}, pendingOrders.length) : null),
-                        h('button', {
-                            onClick: function() { setTab('calls'); },
-                            className: 'flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-1 ' + (tab === 'calls' ? 'bg-orange-500 text-white' : 'bg-slate-800 text-purple-300')
-                        }, '🔔 ', calls.length > 0 ? h('span', {className: 'bg-white text-orange-600 text-xs px-2 rounded-full'}, calls.length) : '0'),
-                        h('button', {
-                            onClick: function() { setTab('tables'); },
-                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'tables' ? 'bg-cyan-500 text-white' : 'bg-slate-800 text-purple-300')
-                        }, '🪑')
-                    ) : null
-                ),
-
-                // Main content
-                h('main', {className: 'p-4 pb-24'},
-                    // STATUS TAB (everyone sees this)
-                    tab === 'status' && h('div', {className: 'space-y-6'},
-                        // Check-in/out card
-                        h('div', {className: 'bg-slate-800/50 border-2 ' + (isOnDuty ? 'border-green-500' : 'border-purple-500/30') + ' rounded-xl p-6 text-center'},
-                            h('div', {className: 'text-6xl mb-4'}, isOnDuty ? '✅' : '🔘'),
-                            h('h2', {className: 'text-2xl font-bold text-white mb-2'}, isOnDuty ? 'Sei in Servizio' : 'Non in Servizio'),
-                            isOnDuty && currentStaff.checkInTime && h('p', {className: 'text-green-300 mb-2'}, 
-                                'Dalle ', new Date(currentStaff.checkInTime).toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
-                                ' • ', getWorkedHours(), 'h'
-                            ),
+            // Event selection screen
+            if (!currentEvent) {
+                return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8'},
+                    h('div', {className: 'max-w-4xl mx-auto'},
+                        h('h1', {className: 'text-4xl font-black text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400'}, '@_muse.in_'),
+                        h('div', {className: 'flex justify-between items-center mb-6'},
+                            h('h2', {className: 'text-2xl font-bold text-white'}, 'Le tue Serate'),
                             h('button', {
-                                onClick: function() { setShowScanner(true); },
-                                className: 'w-full py-4 rounded-xl font-bold text-xl mt-4 ' + (isOnDuty ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white')
-                            }, '📷 Scansiona QR per ', isOnDuty ? 'CHECK-OUT' : 'CHECK-IN')
+                                className: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2',
+                                onClick: () => setShowNewEvent(true)
+                            }, PlusIcon(20), ' Nuova Serata')
                         ),
-
-                        // Today stats (for waiters)
-                        isWaiter && h('div', {className: 'grid grid-cols-3 gap-3'},
-                            h('div', {className: 'bg-pink-500/20 rounded-xl p-4 text-center'},
-                                h('div', {className: 'text-pink-300 text-xs'}, 'Ordini'),
-                                h('div', {className: 'text-white font-bold text-2xl'}, orders.length)
+                        h('div', {className: 'grid gap-4'},
+                            events.map(ev => 
+                                h('div', {key: ev.id, className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6 flex justify-between items-center cursor-pointer hover:border-purple-400', onClick: () => setCurrentEvent(ev)},
+                                    h('div', {},
+                                        h('h3', {className: 'text-xl font-bold text-white'}, ev.name),
+                                        h('p', {className: 'text-purple-300'}, ev.date ? new Date(ev.date).toLocaleDateString('it-IT') : '', ' • ', ev.venue)
+                                    ),
+                                    h('button', {className: 'text-red-400 hover:text-red-300 p-2', onClick: (e) => {e.stopPropagation(); deleteEvent(ev.id);}}, TrashIcon(20))
+                                )
                             ),
-                            h('div', {className: 'bg-orange-500/20 rounded-xl p-4 text-center'},
-                                h('div', {className: 'text-orange-300 text-xs'}, 'Chiamate'),
-                                h('div', {className: 'text-white font-bold text-2xl'}, calls.length)
-                            ),
-                            h('div', {className: 'bg-yellow-500/20 rounded-xl p-4 text-center'},
-                                h('div', {className: 'text-yellow-300 text-xs'}, 'Ore'),
-                                h('div', {className: 'text-white font-bold text-2xl'}, getWorkedHours())
-                            )
+                            events.length === 0 && h('div', {className: 'text-center py-16 text-purple-300'}, 'Nessuna serata. Creane una nuova!')
                         ),
-
-                        // Quick summary for non-waiters
-                        !isWaiter && h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
-                            h('h3', {className: 'text-white font-bold mb-4'}, '📊 Il tuo turno'),
-                            h('div', {className: 'space-y-3'},
-                                h('div', {className: 'flex justify-between'}, 
-                                    h('span', {className: 'text-purple-300'}, 'Ore lavorate'),
-                                    h('span', {className: 'text-white font-bold'}, getWorkedHours(), 'h')
+                        // New Event Modal
+                        showNewEvent && h('div', {className: 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4'},
+                            h('div', {className: 'bg-slate-800 border border-purple-500/30 rounded-xl p-8 max-w-md w-full'},
+                                h('div', {className: 'flex justify-between items-center mb-6'},
+                                    h('h2', {className: 'text-2xl font-bold text-white'}, 'Nuova Serata'),
+                                    h('button', {className: 'text-purple-300', onClick: () => setShowNewEvent(false)}, XIcon(24))
                                 ),
-                                currentStaff.hourlyRate && h('div', {className: 'flex justify-between'}, 
-                                    h('span', {className: 'text-purple-300'}, 'Guadagno stimato'),
-                                    h('span', {className: 'text-green-400 font-bold'}, '€', (getWorkedHours() * currentStaff.hourlyRate).toFixed(2))
+                                h('form', {onSubmit: (e) => {e.preventDefault(); const f = e.target; createEvent(f.name.value, f.date.value, f.venue.value);}},
+                                    h('div', {className: 'space-y-4'},
+                                        h('input', {name: 'name', required: true, placeholder: 'Nome evento', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
+                                        h('input', {name: 'date', type: 'date', required: true, className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
+                                        h('input', {name: 'venue', required: true, placeholder: 'Location', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
+                                        h('button', {type: 'submit', className: 'w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-3 rounded-lg font-bold'}, 'Crea Serata')
+                                    )
                                 )
                             )
-                        ),
+                        )
+                    )
+                );
+            }
 
-                        // Instructions
-                        h('div', {className: 'bg-slate-800/30 border border-purple-500/20 rounded-xl p-4'},
-                            h('p', {className: 'text-purple-300 text-sm text-center'}, '💡 Scansiona il QR esposto in cassa per registrare il tuo ingresso e uscita')
+            // Main event view
+            return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4 md:p-8'},
+                h('div', {className: 'max-w-7xl mx-auto'},
+                    // Header
+                    h('header', {className: 'mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4'},
+                        h('div', {className: 'flex items-center gap-4'},
+                            h('button', {className: 'text-purple-300 hover:text-white', onClick: () => setCurrentEvent(null)}, ChevronLeftIcon(32)),
+                            h('div', {},
+                                h('h1', {className: 'text-2xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400'}, currentEvent.name),
+                                h('p', {className: 'text-purple-300'}, currentEvent.date ? new Date(currentEvent.date).toLocaleDateString('it-IT') : '', ' • ', currentEvent.venue)
+                            )
+                        ),
+                        // Navigation tabs
+                        h('div', {className: 'flex flex-wrap gap-2'},
+                            ['tables', 'prs', 'orders', 'inventory', 'staff'].map(v =>
+                                h('button', {
+                                    key: v,
+                                    className: `px-4 py-2 rounded-lg font-bold text-sm ${view === v ? 'bg-purple-600 text-white' : 'bg-slate-700 text-purple-300'}`,
+                                    onClick: () => setView(v)
+                                }, v === 'tables' ? '🪑 Tavoli' : v === 'prs' ? '👥 PR' : v === 'orders' ? '🍾 Ordini' : v === 'inventory' ? '📦 Magazzino' : '👤 Staff')
+                            )
                         )
                     ),
 
-                    // ORDERS TAB (waiters only)
-                    tab === 'orders' && isWaiter && h('div', {className: 'space-y-4'},
-                        // Pending orders
-                        h('div', {},
-                            h('h2', {className: 'text-white font-bold mb-3 flex items-center gap-2'}, 
-                                h('span', {className: 'w-3 h-3 rounded-full bg-yellow-500'}), 
-                                'Nuovi Ordini (', pendingOrders.length, ')'
-                            ),
-                            pendingOrders.length === 0 
-                                ? h('p', {className: 'text-purple-300 text-center py-4 bg-slate-800/30 rounded-xl'}, 'Nessun ordine in attesa')
-                                : pendingOrders.sort(function(a,b) { return new Date(a.createdAt) - new Date(b.createdAt); }).map(function(order) {
-                                    var table = tables.find(function(t) { return t.id === order.tableId; });
-                                    return h('div', {key: order.id, className: 'bg-yellow-500/20 border-2 border-yellow-400 rounded-xl p-4 mb-3'},
-                                        h('div', {className: 'flex justify-between items-start mb-3'},
-                                            h('div', {},
-                                                h('span', {className: 'text-2xl font-black text-white'}, 'Tavolo ', table ? table.number : '?'),
-                                                h('p', {className: 'text-yellow-200 text-sm'}, timeSince(order.createdAt))
+                    // Stats
+                    h('div', {className: 'grid grid-cols-2 md:grid-cols-5 gap-4 mb-8'},
+                        [{l:'Tavoli',v:tables.length,c:'from-purple-500 to-pink-500'},
+                         {l:'Prenotazioni',v:bookings.length,c:'from-cyan-500 to-blue-500'},
+                         {l:'PR',v:prs.length,c:'from-pink-500 to-orange-500'},
+                         {l:'Ospiti',v:bookings.reduce((s,b)=>s+(b.guestCount||0),0)+guestLists.reduce((s,g)=>s+(g.guestCount||1),0),c:'from-green-500 to-emerald-500'},
+                         {l:'Fatturato',v:'€'+getTotalRevenue().toFixed(0),c:'from-yellow-500 to-orange-500'}
+                        ].map((s,i) => h('div', {key:i, className:`bg-gradient-to-r ${s.c} rounded-xl p-4 text-center`},
+                            h('div', {className: 'text-white/80 text-sm'}, s.l),
+                            h('div', {className: 'text-white text-2xl font-black'}, s.v)
+                        ))
+                    ),
+
+                    // TABLES VIEW
+                    view === 'tables' && h('div', {},
+                        h('div', {className: 'flex justify-between items-center mb-4'},
+                            h('h2', {className: 'text-xl font-bold text-white'}, 'Gestione Tavoli'),
+                            h('button', {className: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2', onClick: addTable}, PlusIcon(18), ' Aggiungi Tavolo')
+                        ),
+                        h('div', {className: 'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4'},
+                            tables.sort((a,b) => a.number - b.number).map(table => {
+                                const booking = getTableBooking(table.id);
+                                const total = getTableTotal(table.id);
+                                return h('div', {
+                                    key: table.id,
+                                    className: `rounded-xl p-4 border-2 cursor-pointer transition-all ${booking ? 'bg-green-500/20 border-green-500' : 'bg-slate-800/50 border-purple-500/30 hover:border-purple-400'}`,
+                                    onClick: () => setSelectedTable(table)
+                                },
+                                    h('div', {className: 'text-center'},
+                                        h('div', {className: 'text-2xl font-black text-white'}, table.number),
+                                        h('div', {className: 'text-purple-300 text-sm'}, table.capacity, ' posti'),
+                                        booking && h('div', {className: 'text-green-300 text-xs mt-1'}, booking.guestName),
+                                        total > 0 && h('div', {className: 'text-yellow-400 text-sm font-bold mt-1'}, '€', total.toFixed(0))
+                                    ),
+                                    h('button', {className: 'text-red-400 text-xs mt-2 w-full', onClick: (e) => {e.stopPropagation(); deleteTable(table.id);}}, 'Elimina')
+                                );
+                            })
+                        ),
+                        // Links section
+                        h('div', {className: 'mt-8 bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                            h('h3', {className: 'text-lg font-bold text-white mb-4'}, 'Link per i Tavoli'),
+                            h('p', {className: 'text-purple-300 text-sm mb-4'}, 'Copia il link e condividilo con i clienti al tavolo'),
+                            h('div', {className: 'space-y-2 max-h-64 overflow-y-auto'},
+                                tables.map(t => h('div', {key: t.id, className: 'flex justify-between items-center bg-slate-900/50 p-3 rounded-lg'},
+                                    h('span', {className: 'text-white'}, 'Tavolo ', t.number),
+                                    h('button', {
+                                        className: 'text-cyan-400 text-sm bg-cyan-500/10 px-3 py-1 rounded',
+                                        onClick: () => {
+                                            const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                            const link = base + 'client-orders.html?event=' + currentEvent.id + '&table=' + t.id;
+                                            navigator.clipboard.writeText(link);
+                                            alert('Link copiato!\\n' + link);
+                                        }
+                                    }, '🔗 Copia Link')
+                                ))
+                            )
+                        ),
+                        // Selected table modal
+                        selectedTable && h('div', {className: 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4'},
+                            h('div', {className: 'bg-slate-800 border border-purple-500/30 rounded-xl p-6 max-w-md w-full'},
+                                h('div', {className: 'flex justify-between items-center mb-4'},
+                                    h('h2', {className: 'text-xl font-bold text-white'}, 'Tavolo ', selectedTable.number),
+                                    h('button', {className: 'text-purple-300', onClick: () => setSelectedTable(null)}, XIcon(24))
+                                ),
+                                (() => {
+                                    const booking = getTableBooking(selectedTable.id);
+                                    if (booking) {
+                                        return h('div', {className: 'space-y-3'},
+                                            h('p', {className: 'text-white'}, h('strong', {}, 'Ospite: '), booking.guestName),
+                                            h('p', {className: 'text-purple-300'}, h('strong', {}, 'Persone: '), booking.guestCount),
+                                            booking.phone && h('p', {className: 'text-purple-300'}, h('strong', {}, 'Tel: '), booking.phone),
+                                            booking.notes && h('p', {className: 'text-purple-300'}, h('strong', {}, 'Note: '), booking.notes),
+                                            h('button', {className: 'w-full bg-red-500 text-white py-2 rounded-lg mt-4', onClick: () => {deleteBooking(booking.id); setSelectedTable(null);}}, 'Rimuovi Prenotazione')
+                                        );
+                                    }
+                                    return h('form', {onSubmit: (e) => {
+                                        e.preventDefault();
+                                        const f = e.target;
+                                        addBooking(selectedTable.id, {
+                                            guestName: f.guestName.value,
+                                            guestCount: parseInt(f.guestCount.value),
+                                            phone: f.phone.value,
+                                            notes: f.notes.value,
+                                            prId: f.prId.value || null,
+                                            prName: prs.find(p => p.id === f.prId.value)?.name || null
+                                        });
+                                        setSelectedTable(null);
+                                    }},
+                                        h('div', {className: 'space-y-4'},
+                                            h('input', {name: 'guestName', required: true, placeholder: 'Nome ospite', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
+                                            h('input', {name: 'guestCount', type: 'number', min: 1, defaultValue: selectedTable.capacity, placeholder: 'Numero persone', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
+                                            h('input', {name: 'phone', placeholder: 'Telefono (opz)', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
+                                            h('select', {name: 'prId', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'},
+                                                h('option', {value: ''}, 'Nessun PR'),
+                                                prs.map(p => h('option', {key: p.id, value: p.id}, p.name))
                                             ),
-                                            h('span', {className: 'bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-bold'}, 'NUOVO')
-                                        ),
-                                        h('div', {className: 'bg-slate-900/50 rounded-lg p-3 mb-3'},
-                                            h('div', {className: 'text-white font-bold text-lg'}, order.quantity, 'x ', order.productName),
-                                            h('div', {className: 'text-yellow-300'}, '€', order.total ? order.total.toFixed(2) : '0.00')
-                                        ),
-                                        h('div', {className: 'flex gap-2'},
-                                            h('button', {
-                                                onClick: function() { updateOrderStatus(order.id, 'preparing'); },
-                                                className: 'flex-1 bg-blue-500 text-white py-2 rounded-lg font-bold'
-                                            }, '👨‍🍳 Prepara'),
-                                            h('button', {
-                                                onClick: function() { updateOrderStatus(order.id, 'served'); },
-                                                className: 'flex-1 bg-green-500 text-white py-2 rounded-lg font-bold'
-                                            }, '✓ Servito')
+                                            h('textarea', {name: 'notes', placeholder: 'Note (opz)', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white', rows: 2}),
+                                            h('button', {type: 'submit', className: 'w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-3 rounded-lg font-bold'}, 'Prenota Tavolo')
                                         )
                                     );
-                                })
-                        ),
-
-                        // Preparing orders
-                        preparingOrders.length > 0 && h('div', {},
-                            h('h2', {className: 'text-white font-bold mb-3 flex items-center gap-2'}, 
-                                h('span', {className: 'w-3 h-3 rounded-full bg-blue-500'}), 
-                                'In Preparazione (', preparingOrders.length, ')'
-                            ),
-                            preparingOrders.map(function(order) {
-                                var table = tables.find(function(t) { return t.id === order.tableId; });
-                                return h('div', {key: order.id, className: 'bg-blue-500/20 border border-blue-400/50 rounded-xl p-4 mb-3'},
-                                    h('div', {className: 'flex justify-between items-center'},
-                                        h('div', {},
-                                            h('span', {className: 'text-white font-bold'}, 'Tavolo ', table ? table.number : '?'),
-                                            h('span', {className: 'text-blue-300 ml-2'}, order.quantity, 'x ', order.productName)
-                                        ),
-                                        h('button', {
-                                            onClick: function() { updateOrderStatus(order.id, 'served'); },
-                                            className: 'bg-green-500 text-white px-3 py-1 rounded-lg text-sm font-bold'
-                                        }, '✓ Servito')
-                                    )
-                                );
-                            })
-                        ),
-
-                        // Ready orders
-                        readyOrders.length > 0 && h('div', {},
-                            h('h2', {className: 'text-white font-bold mb-3 flex items-center gap-2'}, 
-                                h('span', {className: 'w-3 h-3 rounded-full bg-green-500 animate-pulse'}), 
-                                'Pronti da Servire (', readyOrders.length, ')'
-                            ),
-                            readyOrders.map(function(order) {
-                                var table = tables.find(function(t) { return t.id === order.tableId; });
-                                return h('div', {key: order.id, className: 'bg-green-500/20 border-2 border-green-400 rounded-xl p-4 mb-3'},
-                                    h('div', {className: 'flex justify-between items-center'},
-                                        h('div', {},
-                                            h('span', {className: 'text-xl font-black text-white'}, '📍 Tavolo ', table ? table.number : '?'),
-                                            h('p', {className: 'text-green-300'}, order.quantity, 'x ', order.productName)
-                                        ),
-                                        h('button', {
-                                            onClick: function() { updateOrderStatus(order.id, 'served'); },
-                                            className: 'bg-green-500 text-white px-4 py-2 rounded-lg font-bold'
-                                        }, '✓ Consegnato')
-                                    )
-                                );
-                            })
+                                })()
+                            )
                         )
                     ),
 
-                    // CALLS TAB (waiters only)
-                    tab === 'calls' && isWaiter && h('div', {className: 'space-y-3'},
-                        calls.length === 0 
-                            ? h('div', {className: 'text-center py-16'},
-                                h('div', {className: 'text-6xl mb-4'}, '🔔'),
-                                h('p', {className: 'text-white font-bold'}, 'Nessuna chiamata'),
-                                h('p', {className: 'text-purple-300 text-sm'}, 'Le chiamate appariranno qui')
-                            )
-                            : calls.sort(function(a,b) { return new Date(a.createdAt) - new Date(b.createdAt); }).map(function(call) {
-                                return h('div', {key: call.id, className: 'call-pulse bg-orange-500/20 border-2 border-orange-400 rounded-xl p-4'},
-                                    h('div', {className: 'flex justify-between items-start mb-3'},
-                                        h('div', {},
-                                            h('span', {className: 'text-3xl font-black text-white'}, 'Tavolo ', call.tableNumber),
-                                            h('p', {className: 'text-orange-200 text-sm mt-1'}, timeSince(call.createdAt))
+                    // PRS VIEW
+                    view === 'prs' && h('div', {className: 'grid grid-cols-1 lg:grid-cols-3 gap-8'},
+                        h('div', {className: 'lg:col-span-2'},
+                            h('div', {className: 'flex justify-between items-center mb-4'},
+                                h('h2', {className: 'text-xl font-bold text-white'}, 'PR / Promoter'),
+                                h('button', {className: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2', onClick: () => setShowNewPr(true)}, PlusIcon(18), ' Nuovo PR')
+                            ),
+                            h('div', {className: 'space-y-3'},
+                                prs.map(pr => {
+                                    const stats = getPrStats(pr.id);
+                                    return h('div', {key: pr.id, className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-4 cursor-pointer hover:border-purple-400', onClick: () => setSelectedPr(pr)},
+                                        h('div', {className: 'flex justify-between items-start mb-3'},
+                                            h('div', {},
+                                                h('h3', {className: 'text-white font-bold text-lg'}, pr.name),
+                                                pr.phone && h('p', {className: 'text-purple-300 text-sm'}, pr.phone)
+                                            ),
+                                            h('div', {className: 'flex gap-2'},
+                                                h('button', {
+                                                    className: 'text-cyan-400 text-sm bg-cyan-500/10 px-3 py-1 rounded',
+                                                    onClick: (e) => {
+                                                        e.stopPropagation();
+                                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                                        const link = base + 'pr-app.html?event=' + currentEvent.id + '&pr=' + pr.id;
+                                                        navigator.clipboard.writeText(link);
+                                                        alert('Link copiato!\\n' + link);
+                                                    }
+                                                }, '🔗 Link'),
+                                                h('button', {className: 'text-red-400', onClick: (e) => {e.stopPropagation(); deletePr(pr.id);}}, TrashIcon(16))
+                                            )
                                         ),
-                                        h('span', {className: 'text-2xl'}, '🔔')
+                                        h('div', {className: 'grid grid-cols-3 gap-2 text-center'},
+                                            h('div', {className: 'bg-purple-500/20 rounded p-2'}, h('div', {className: 'text-xs text-purple-300'}, 'Lista'), h('div', {className: 'text-white font-bold'}, stats.guestListCount)),
+                                            h('div', {className: 'bg-cyan-500/20 rounded p-2'}, h('div', {className: 'text-xs text-cyan-300'}, 'Tavoli'), h('div', {className: 'text-white font-bold'}, stats.tableBookings)),
+                                            h('div', {className: 'bg-green-500/20 rounded p-2'}, h('div', {className: 'text-xs text-green-300'}, 'Check-in'), h('div', {className: 'text-white font-bold'}, stats.checkedInCount))
+                                        )
+                                    );
+                                }),
+                                prs.length === 0 && h('div', {className: 'text-center py-16 text-purple-300'}, 'Nessun PR. Aggiungine uno!')
+                            )
+                        ),
+                        // Guest list panel
+                        h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                            h('h3', {className: 'text-lg font-bold text-white mb-4'}, selectedPr ? 'Lista ' + selectedPr.name : 'Seleziona un PR'),
+                            selectedPr ? h('div', {},
+                                h('button', {
+                                    className: 'w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-2 rounded-lg mb-4 font-bold',
+                                    onClick: () => {
+                                        const name = prompt('Nome ospite:');
+                                        if (!name) return;
+                                        const count = parseInt(prompt('Numero persone:', '1')) || 1;
+                                        addGuest(selectedPr.id, name, count);
+                                    }
+                                }, '+ Aggiungi Ospite'),
+                                h('div', {className: 'space-y-2 max-h-96 overflow-y-auto'},
+                                    guestLists.filter(g => g.prId === selectedPr.id).map(guest =>
+                                        h('div', {key: guest.id, className: `rounded-lg p-3 border ${guest.checkedIn ? 'bg-green-500/20 border-green-400/40' : 'bg-slate-900/50 border-purple-500/20'}`},
+                                            h('div', {className: 'flex justify-between items-center'},
+                                                h('div', {},
+                                                    h('div', {className: 'text-white font-medium'}, guest.guestName),
+                                                    h('div', {className: 'text-purple-300 text-xs'}, guest.guestCount, ' ', guest.guestCount === 1 ? 'persona' : 'persone')
+                                                ),
+                                                h('div', {className: 'flex gap-2'},
+                                                    h('button', {
+                                                        className: `px-3 py-1 rounded text-xs ${guest.checkedIn ? 'bg-green-500 text-white' : 'bg-slate-700 text-purple-300'}`,
+                                                        onClick: () => toggleGuestCheckIn(guest.id, guest.checkedIn)
+                                                    }, guest.checkedIn ? '✓' : 'Check-in'),
+                                                    h('button', {className: 'text-red-400', onClick: () => deleteGuest(guest.id)}, XIcon(16))
+                                                )
+                                            )
+                                        )
                                     ),
-                                    h('button', {
-                                        onClick: function() { clearCall(call.id); },
-                                        className: 'w-full bg-green-500 text-white py-3 rounded-lg font-bold text-lg'
-                                    }, '✓ Servito')
-                                );
-                            })
-                    ),
-
-                    // TABLES TAB (waiters only)
-                    tab === 'tables' && isWaiter && h('div', {className: 'space-y-3'},
-                        tables.sort(function(a,b) { return a.number - b.number; }).map(function(table) {
-                            var booking = bookings.find(function(b) { return b.tableId === table.id; });
-                            var tableOrders = orders.filter(function(o) { return o.tableId === table.id; });
-                            var pendingCount = tableOrders.filter(function(o) { return !o.status || o.status === 'pending'; }).length;
-                            var total = tableOrders.reduce(function(s, o) { return s + (o.total || 0); }, 0);
-                            var hasCall = calls.some(function(c) { return c.tableId === table.id; });
-                            
-                            return h('div', {key: table.id, className: 'rounded-xl p-4 border-2 ' + (hasCall ? 'bg-orange-500/20 border-orange-400' : booking ? 'bg-green-500/10 border-green-500/40' : 'bg-slate-800/50 border-purple-500/30')},
-                                h('div', {className: 'flex justify-between items-start'},
-                                    h('div', {},
-                                        h('span', {className: 'text-white font-bold text-xl'}, 'Tavolo ', table.number, hasCall ? ' 🔔' : ''),
-                                        booking 
-                                            ? h('p', {className: 'text-green-300 text-sm'}, '👤 ', booking.guestName)
-                                            : h('p', {className: 'text-purple-400 text-sm'}, 'Libero • ', table.capacity, ' posti'),
-                                        pendingCount > 0 && h('p', {className: 'text-yellow-400 text-sm font-bold'}, '⏳ ', pendingCount, ' ordini in attesa')
-                                    ),
-                                    total > 0 && h('div', {className: 'text-right'},
-                                        h('div', {className: 'text-yellow-400 font-bold'}, '€', total.toFixed(2)),
-                                        h('div', {className: 'text-purple-300 text-xs'}, tableOrders.length, ' ordini')
+                                    guestLists.filter(g => g.prId === selectedPr.id).length === 0 && h('p', {className: 'text-purple-300 text-center py-8'}, 'Lista vuota')
+                                )
+                            ) : h('p', {className: 'text-purple-300 text-center py-8'}, 'Clicca su un PR per vedere la sua lista')
+                        ),
+                        // New PR Modal
+                        showNewPr && h('div', {className: 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4'},
+                            h('div', {className: 'bg-slate-800 border border-purple-500/30 rounded-xl p-6 max-w-md w-full'},
+                                h('div', {className: 'flex justify-between items-center mb-4'},
+                                    h('h2', {className: 'text-xl font-bold text-white'}, 'Nuovo PR'),
+                                    h('button', {className: 'text-purple-300', onClick: () => setShowNewPr(false)}, XIcon(24))
+                                ),
+                                h('form', {onSubmit: (e) => {e.preventDefault(); addPr(e.target.name.value, e.target.phone.value);}},
+                                    h('div', {className: 'space-y-4'},
+                                        h('input', {name: 'name', required: true, placeholder: 'Nome PR', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
+                                        h('input', {name: 'phone', placeholder: 'Telefono (opz)', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
+                                        h('button', {type: 'submit', className: 'w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-3 rounded-lg font-bold'}, 'Crea PR')
                                     )
                                 )
-                            );
-                        })
-                    )
-                ),
+                            )
+                        )
+                    ),
 
-                // QR Scanner Modal
-                showScanner && h('div', {className: 'fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4'},
-                    h('div', {className: 'bg-slate-800 border border-purple-500/30 rounded-xl p-6 w-full max-w-md'},
-                        h('div', {className: 'flex justify-between items-center mb-4'},
-                            h('h2', {className: 'text-xl font-bold text-white'}, '📷 Scansiona QR Serata'),
-                            h('button', {
-                                onClick: function() { 
-                                    setShowScanner(false); 
-                                    setScanResult(null);
-                                    if (scannerRef.current) {
-                                        scannerRef.current.stop().catch(function() {});
-                                        scannerRef.current = null;
+                    // ORDERS VIEW
+                    view === 'orders' && h('div', {className: 'grid grid-cols-1 lg:grid-cols-3 gap-8'},
+                        h('div', {className: 'lg:col-span-2'},
+                            // Menu section
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6 mb-6'},
+                                h('div', {className: 'flex justify-between items-center mb-4'},
+                                    h('h2', {className: 'text-xl font-bold text-white'}, 'Menu'),
+                                    h('button', {
+                                        className: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold text-sm',
+                                        onClick: () => {
+                                            const name = prompt('Nome prodotto:');
+                                            if (!name) return;
+                                            const category = prompt('Categoria (es: Bottiglie, Cocktail):');
+                                            if (!category) return;
+                                            const price = parseFloat(prompt('Prezzo €:'));
+                                            if (isNaN(price)) return;
+                                            addMenuItem(name, category, price);
+                                        }
+                                    }, '+ Aggiungi')
+                                ),
+                                h('div', {className: 'space-y-2 max-h-64 overflow-y-auto'},
+                                    menu.map(item => h('div', {key: item.id, className: 'flex justify-between items-center bg-slate-900/50 p-3 rounded-lg'},
+                                        h('div', {}, h('span', {className: 'text-white font-bold'}, item.name), h('span', {className: 'text-purple-300 text-sm ml-2'}, '(', item.category, ')')),
+                                        h('div', {className: 'flex items-center gap-3'},
+                                            h('span', {className: 'text-green-400 font-bold'}, '€', item.price?.toFixed(2)),
+                                            h('button', {className: 'text-red-400', onClick: () => deleteMenuItem(item.id)}, XIcon(16))
+                                        )
+                                    )),
+                                    menu.length === 0 && h('p', {className: 'text-purple-300 text-center py-8'}, 'Menu vuoto')
+                                )
+                            ),
+                            // Waiter calls
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6 mb-6'},
+                                h('h2', {className: 'text-xl font-bold text-white mb-4'}, '🔔 Chiamate Cameriere ', waiterCalls.length > 0 && h('span', {className: 'bg-orange-500 text-white text-sm px-2 py-1 rounded-full ml-2'}, waiterCalls.length)),
+                                h('div', {className: 'space-y-2'},
+                                    waiterCalls.map(call => h('div', {key: call.id, className: 'bg-orange-500/20 border border-orange-400/50 rounded-lg p-4 flex justify-between items-center'},
+                                        h('div', {},
+                                            h('div', {className: 'text-white font-bold text-lg'}, 'Tavolo ', call.tableNumber),
+                                            h('div', {className: 'text-orange-300 text-sm'}, new Date(call.createdAt).toLocaleTimeString('it-IT'))
+                                        ),
+                                        h('button', {className: 'bg-green-500 text-white px-4 py-2 rounded-lg font-bold', onClick: () => clearWaiterCall(call.id)}, '✓ Servito')
+                                    )),
+                                    waiterCalls.length === 0 && h('p', {className: 'text-purple-300 text-center py-4'}, 'Nessuna chiamata')
+                                )
+                            ),
+                            // Orders list
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                                h('h2', {className: 'text-xl font-bold text-white mb-4'}, 'Ordini'),
+                                h('div', {className: 'space-y-3 max-h-96 overflow-y-auto'},
+                                    tables.map(table => {
+                                        const tableOrders = getTableOrders(table.id);
+                                        if (tableOrders.length === 0) return null;
+                                        return h('div', {key: table.id, className: 'bg-slate-900/50 rounded-lg p-4 border border-purple-500/20'},
+                                            h('div', {className: 'flex justify-between items-start mb-2'},
+                                                h('div', {}, h('h3', {className: 'text-white font-bold'}, 'Tavolo ', table.number), h('p', {className: 'text-purple-300 text-sm'}, tableOrders.length, ' ordini')),
+                                                h('div', {className: 'text-yellow-400 font-bold text-lg'}, '€', getTableTotal(table.id).toFixed(2))
+                                            ),
+                                            h('div', {className: 'space-y-1 text-sm text-purple-200'},
+                                                tableOrders.map(o => h('div', {key: o.id, className: 'flex justify-between'}, h('span', {}, o.quantity, 'x ', o.productName), h('span', {}, '€', o.total?.toFixed(2))))
+                                            )
+                                        );
+                                    }),
+                                    orders.length === 0 && h('p', {className: 'text-purple-300 text-center py-8'}, 'Nessun ordine')
+                                )
+                            )
+                        ),
+                        // Sidebar with waiter link
+                        h('div', {className: 'space-y-4'},
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                                h('h3', {className: 'text-lg font-bold text-white mb-4'}, '📱 App Camerieri Pro'),
+                                h('p', {className: 'text-purple-300 text-sm mb-4'}, 'Gestione ordini + Scanner QR check-in'),
+                                h('button', {
+                                    className: 'w-full bg-gradient-to-r from-emerald-500 to-green-600 text-white py-3 rounded-lg font-bold mb-2',
+                                    onClick: () => {
+                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                        const link = base + 'waiter-app-v2.html?event=' + currentEvent.id;
+                                        navigator.clipboard.writeText(link);
+                                        alert('Link copiato!\\n' + link);
                                     }
-                                },
-                                className: 'text-purple-300 text-2xl'
-                            }, '✕')
-                        ),
-                        !scanResult && h('div', {id: 'qr-reader', className: 'mb-4'}),
-                        scanResult && h('div', {className: 'text-center py-8 ' + (scanResult.success ? 'bg-green-500/20' : 'bg-red-500/20') + ' rounded-xl'},
-                            h('div', {className: 'text-6xl mb-4'}, scanResult.success ? '✓' : '✕'),
-                            h('p', {className: scanResult.success ? 'text-green-300 text-2xl font-bold' : 'text-red-300 text-lg'}, scanResult.message)
-                        ),
-                        !scanResult && h('p', {className: 'text-purple-300 text-sm text-center'}, 'Inquadra il QR esposto in cassa')
-                    )
-                ),
+                                }, '🔗 Copia Link Camerieri Pro'),
+                                h('button', {
+                                    className: 'w-full bg-slate-700 text-purple-300 py-2 rounded-lg text-sm',
+                                    onClick: () => {
+                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                        const link = base + 'waiter-app.html?event=' + currentEvent.id;
+                                        navigator.clipboard.writeText(link);
+                                        alert('Link copiato!\\n' + link);
+                                    }
+                                }, '🔗 Link versione base')
+                            ),
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                                h('h3', {className: 'text-lg font-bold text-white mb-4'}, '🎫 Badge Staff QR'),
+                                h('p', {className: 'text-purple-300 text-sm mb-4'}, 'Genera e stampa badge per check-in/out'),
+                                h('button', {
+                                    className: 'w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 rounded-lg font-bold',
+                                    onClick: () => {
+                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                        const link = base + 'staff-badges.html?event=' + currentEvent.id;
+                                        window.open(link, '_blank');
+                                    }
+                                }, '🖨️ Genera Badge Staff')
+                            )
+                        )
+                    ),
 
-                // Floating notification for calls (waiters only)
-                isWaiter && calls.length > 0 && tab !== 'calls' && h('button', {
-                    onClick: function() { setTab('calls'); },
-                    className: 'fixed bottom-6 right-6 bg-orange-500 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-2 animate-bounce'
-                }, '🔔 ', calls.length)
+                    // INVENTORY VIEW
+                    view === 'inventory' && h('div', {className: 'grid grid-cols-1 lg:grid-cols-3 gap-8'},
+                        h('div', {className: 'lg:col-span-2'},
+                            h('div', {className: 'flex justify-between items-center mb-4'},
+                                h('h2', {className: 'text-xl font-bold text-white'}, '📦 Magazzino'),
+                                h('button', {
+                                    className: 'bg-gradient-to-r from-amber-500 to-orange-600 text-white px-4 py-2 rounded-lg font-bold text-sm',
+                                    onClick: () => {
+                                        const name = prompt('Nome prodotto:');
+                                        if (!name) return;
+                                        const category = prompt('Categoria:');
+                                        if (!category) return;
+                                        const quantity = parseInt(prompt('Quantità:'));
+                                        if (isNaN(quantity)) return;
+                                        const price = parseFloat(prompt('Prezzo unitario €:'));
+                                        if (isNaN(price)) return;
+                                        addInventoryItem(name, category, quantity, price);
+                                    }
+                                }, '+ Aggiungi')
+                            ),
+                            h('div', {className: 'space-y-3'},
+                                inventory.map(item => h('div', {key: item.id, className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-4'},
+                                    h('div', {className: 'flex justify-between items-start mb-3'},
+                                        h('div', {},
+                                            h('h3', {className: 'text-white font-bold text-lg'}, item.name),
+                                            h('p', {className: 'text-purple-300 text-sm'}, item.category, ' • €', item.unitPrice, '/pz')
+                                        ),
+                                        h('button', {className: 'text-red-400', onClick: () => deleteInventoryItem(item.id)}, TrashIcon(16))
+                                    ),
+                                    h('div', {className: 'grid grid-cols-3 gap-2 mb-3'},
+                                        h('div', {className: 'bg-slate-900/50 rounded p-2 text-center'}, h('div', {className: 'text-purple-300 text-xs'}, 'Iniziale'), h('div', {className: 'text-white font-bold'}, item.initialStock)),
+                                        h('div', {className: 'bg-orange-500/20 rounded p-2 text-center'}, h('div', {className: 'text-orange-300 text-xs'}, 'Manuale'), h('div', {className: 'text-white font-bold'}, item.manualConsumption || 0)),
+                                        h('div', {className: 'bg-green-500/20 rounded p-2 text-center'}, h('div', {className: 'text-green-300 text-xs'}, 'Rimaste'), h('div', {className: 'text-white font-bold'}, (item.initialStock || 0) - (item.manualConsumption || 0)))
+                                    ),
+                                    h('div', {className: 'flex items-center justify-between bg-slate-900/30 rounded-lg p-2'},
+                                        h('span', {className: 'text-purple-300 text-sm'}, 'Consumo manuale:'),
+                                        h('div', {className: 'flex items-center gap-2'},
+                                            h('button', {className: 'bg-slate-700 text-white w-8 h-8 rounded', onClick: () => updateInventoryItem(item.id, {manualConsumption: Math.max(0, (item.manualConsumption||0) - 1)})}, '-'),
+                                            h('span', {className: 'text-white font-bold w-8 text-center'}, item.manualConsumption || 0),
+                                            h('button', {className: 'bg-slate-700 text-white w-8 h-8 rounded', onClick: () => updateInventoryItem(item.id, {manualConsumption: (item.manualConsumption||0) + 1})}, '+')
+                                        )
+                                    )
+                                )),
+                                inventory.length === 0 && h('p', {className: 'text-purple-300 text-center py-16'}, 'Magazzino vuoto')
+                            )
+                        ),
+                        h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                            h('h3', {className: 'text-lg font-bold text-white mb-4'}, 'Riepilogo'),
+                            h('div', {className: 'space-y-3'},
+                                h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'Prodotti'), h('span', {className: 'text-white font-bold'}, inventory.length)),
+                                h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'Valore stock'), h('span', {className: 'text-white font-bold'}, '€', inventory.reduce((s,i) => s + ((i.initialStock||0) - (i.manualConsumption||0)) * (i.unitPrice||0), 0).toFixed(0)))
+                            )
+                        )
+                    ),
+
+                    // STAFF VIEW
+                    view === 'staff' && h('div', {className: 'grid grid-cols-1 lg:grid-cols-3 gap-8'},
+                        h('div', {className: 'lg:col-span-2'},
+                            h('div', {className: 'flex justify-between items-center mb-4'},
+                                h('h2', {className: 'text-xl font-bold text-white'}, '👤 Staff'),
+                                h('button', {
+                                    className: 'bg-gradient-to-r from-emerald-500 to-green-600 text-white px-4 py-2 rounded-lg font-bold text-sm',
+                                    onClick: () => {
+                                        const name = prompt('Nome:');
+                                        if (!name) return;
+                                        const role = prompt('Ruolo (es: Cameriere, Barista, Sicurezza):');
+                                        if (!role) return;
+                                        const phone = prompt('Telefono (opz):') || '';
+                                        const rate = parseFloat(prompt('Paga oraria € (opz):') || '0');
+                                        addStaffMember(name, role, phone, rate);
+                                    }
+                                }, '+ Aggiungi')
+                            ),
+                            h('div', {className: 'space-y-3'},
+                                staff.map(member => {
+                                    const isOn = member.status === 'on-duty';
+                                    const isWaiter = member.role && (member.role.toLowerCase() === 'cameriere' || member.role.toLowerCase() === 'cameriera');
+                                    let hours = 0;
+                                    if (member.checkInTime) {
+                                        const checkIn = new Date(member.checkInTime);
+                                        const checkOut = member.checkOutTime ? new Date(member.checkOutTime) : new Date();
+                                        hours = (checkOut - checkIn) / (1000 * 60 * 60);
+                                    }
+                                    return h('div', {key: member.id, className: `rounded-xl p-4 border ${isOn ? 'bg-green-500/10 border-green-400/40' : 'bg-slate-800/50 border-purple-500/30'}`},
+                                        h('div', {className: 'flex justify-between items-start mb-3'},
+                                            h('div', {className: 'flex items-start gap-3'},
+                                                h('div', {className: `w-3 h-3 rounded-full mt-2 ${isOn ? 'bg-green-400' : 'bg-slate-500'}`}),
+                                                h('div', {},
+                                                    h('h3', {className: 'text-white font-bold text-lg'}, member.name),
+                                                    h('p', {className: 'text-purple-300 text-sm'}, member.role, isWaiter ? ' 🍽️' : ''),
+                                                    member.phone && h('p', {className: 'text-purple-400 text-xs'}, member.phone)
+                                                )
+                                            ),
+                                            h('div', {className: 'flex gap-2'},
+                                                h('button', {
+                                                    className: 'text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded text-xs',
+                                                    onClick: () => {
+                                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                                        const link = base + 'staff-app.html?event=' + currentEvent.id + '&staff=' + member.id;
+                                                        navigator.clipboard.writeText(link);
+                                                        alert('Link copiato per ' + member.name + '!\\n\\n' + link);
+                                                    }
+                                                }, '🔗 Link'),
+                                                h('button', {className: 'text-red-400', onClick: () => deleteStaffMember(member.id)}, TrashIcon(16))
+                                            )
+                                        ),
+                                        h('div', {className: 'grid grid-cols-3 gap-2 mb-3'},
+                                            h('div', {className: 'bg-slate-900/50 rounded p-2 text-center'}, h('div', {className: 'text-purple-300 text-xs'}, 'Check-in'), h('div', {className: 'text-white text-sm'}, member.checkInTime ? new Date(member.checkInTime).toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'}) : '-')),
+                                            h('div', {className: 'bg-slate-900/50 rounded p-2 text-center'}, h('div', {className: 'text-purple-300 text-xs'}, 'Check-out'), h('div', {className: 'text-white text-sm'}, member.checkOutTime ? new Date(member.checkOutTime).toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'}) : isOn ? 'In corso' : '-')),
+                                            h('div', {className: 'bg-slate-900/50 rounded p-2 text-center'}, h('div', {className: 'text-purple-300 text-xs'}, 'Ore'), h('div', {className: 'text-white text-sm'}, hours > 0 ? hours.toFixed(1) + 'h' : '-'))
+                                        ),
+                                        h('button', {
+                                            className: `w-full py-2 rounded-lg font-bold ${isOn ? 'bg-red-500/20 text-red-300 border border-red-500/30' : 'bg-green-500/20 text-green-300 border border-green-500/30'}`,
+                                            onClick: () => toggleStaffStatus(member.id, member.status)
+                                        }, isOn ? '⏹ Check-out' : '▶ Check-in')
+                                    );
+                                }),
+                                staff.length === 0 && h('p', {className: 'text-purple-300 text-center py-16'}, 'Nessuno staff. Aggiungi camerieri, baristi, sicurezza...')
+                            )
+                        ),
+                        h('div', {className: 'space-y-6'},
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                                h('h3', {className: 'text-lg font-bold text-white mb-4'}, 'Riepilogo'),
+                                h('div', {className: 'space-y-3'},
+                                    h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'Totale'), h('span', {className: 'text-white font-bold'}, staff.length)),
+                                    h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'In servizio'), h('span', {className: 'text-green-400 font-bold'}, staff.filter(s => s.status === 'on-duty').length)),
+                                    h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'Camerieri'), h('span', {className: 'text-cyan-400 font-bold'}, staff.filter(s => s.role && (s.role.toLowerCase() === 'cameriere' || s.role.toLowerCase() === 'cameriera')).length)),
+                                    h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'Costo totale'), h('span', {className: 'text-yellow-400 font-bold'}, '€', staff.reduce((sum, m) => {
+                                        if (!m.hourlyRate || !m.checkInTime) return sum;
+                                        const checkIn = new Date(m.checkInTime);
+                                        const checkOut = m.checkOutTime ? new Date(m.checkOutTime) : new Date();
+                                        const hours = (checkOut - checkIn) / (1000 * 60 * 60);
+                                        return sum + (hours * m.hourlyRate);
+                                    }, 0).toFixed(0)))
+                                )
+                            ),
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                                h('h3', {className: 'text-lg font-bold text-white mb-3'}, '📷 QR Check-in Serata'),
+                                h('p', {className: 'text-purple-300 text-sm mb-4'}, 'Genera il QR da mostrare allo staff per timbrare'),
+                                h('button', {
+                                    className: 'w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 rounded-lg font-bold',
+                                    onClick: () => {
+                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                        const link = base + 'event-qr.html?event=' + currentEvent.id;
+                                        window.open(link, '_blank');
+                                    }
+                                }, '📱 Mostra QR Serata')
+                            ),
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                                h('h3', {className: 'text-lg font-bold text-white mb-3'}, '💡 Come funziona'),
+                                h('div', {className: 'text-purple-300 text-sm space-y-2'},
+                                    h('p', {}, '1. Aggiungi lo staff con nome e ruolo'),
+                                    h('p', {}, '2. Clicca "🔗 Link" per copiare il link personale'),
+                                    h('p', {}, '3. Invia il link al membro dello staff'),
+                                    h('p', {}, '4. Lo staff scansiona il QR serata per check-in/out'),
+                                    h('p', {}, '5. I ', h('strong', {}, 'Camerieri'), ' vedono anche ordini e chiamate')
+                                )
+                            )
+                        )
+                    )
+                )
             );
         }
 
