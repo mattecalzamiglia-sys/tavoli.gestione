@@ -572,43 +572,8 @@
                                 )
                             )
                         ),
-                        // Sidebar with waiter link
-                        h('div', {className: 'space-y-4'},
-                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
-                                h('h3', {className: 'text-lg font-bold text-white mb-4'}, '📱 App Camerieri Pro'),
-                                h('p', {className: 'text-purple-300 text-sm mb-4'}, 'Gestione ordini + Scanner QR check-in'),
-                                h('button', {
-                                    className: 'w-full bg-gradient-to-r from-emerald-500 to-green-600 text-white py-3 rounded-lg font-bold mb-2',
-                                    onClick: () => {
-                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
-                                        const link = base + 'waiter-app-v2.html?event=' + currentEvent.id;
-                                        navigator.clipboard.writeText(link);
-                                        alert('Link copiato!\\n' + link);
-                                    }
-                                }, '🔗 Copia Link Camerieri Pro'),
-                                h('button', {
-                                    className: 'w-full bg-slate-700 text-purple-300 py-2 rounded-lg text-sm',
-                                    onClick: () => {
-                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
-                                        const link = base + 'waiter-app.html?event=' + currentEvent.id;
-                                        navigator.clipboard.writeText(link);
-                                        alert('Link copiato!\\n' + link);
-                                    }
-                                }, '🔗 Link versione base')
-                            ),
-                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
-                                h('h3', {className: 'text-lg font-bold text-white mb-4'}, '🎫 Badge Staff QR'),
-                                h('p', {className: 'text-purple-300 text-sm mb-4'}, 'Genera e stampa badge per check-in/out'),
-                                h('button', {
-                                    className: 'w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 rounded-lg font-bold',
-                                    onClick: () => {
-                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
-                                        const link = base + 'staff-badges.html?event=' + currentEvent.id;
-                                        window.open(link, '_blank');
-                                    }
-                                }, '🖨️ Genera Badge Staff')
-                            )
-                        )
+                        // Sidebar vuota - i link staff sono nella sezione Staff
+                        h('div', {})
                     ),
 
                     // INVENTORY VIEW
