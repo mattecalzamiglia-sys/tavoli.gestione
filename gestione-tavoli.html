@@ -57,6 +57,7 @@
             const [view, setView] = useState('tables'); // tables, prs, orders, inventory, staff
             const [showNewEvent, setShowNewEvent] = useState(false);
             const [showNewPr, setShowNewPr] = useState(false);
+            const [showFullGuestList, setShowFullGuestList] = useState(false);
             const [selectedPr, setSelectedPr] = useState(null);
             const [selectedTable, setSelectedTable] = useState(null);
             const [editMode, setEditMode] = useState(false);
@@ -418,7 +419,10 @@
                         h('div', {className: 'lg:col-span-2'},
                             h('div', {className: 'flex justify-between items-center mb-4'},
                                 h('h2', {className: 'text-xl font-bold text-white'}, 'PR / Promoter'),
-                                h('button', {className: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2', onClick: () => setShowNewPr(true)}, PlusIcon(18), ' Nuovo PR')
+                                h('div', {className: 'flex gap-2'},
+                                    h('button', {className: 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2', onClick: () => setShowFullGuestList(true)}, '📋 Lista Completa'),
+                                    h('button', {className: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2', onClick: () => setShowNewPr(true)}, PlusIcon(18), ' Nuovo PR')
+                                )
                             ),
                             h('div', {className: 'space-y-3'},
                                 prs.map(pr => {
@@ -501,6 +505,60 @@
                                         h('input', {name: 'phone', placeholder: 'Telefono (opz)', className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white'}),
                                         h('button', {type: 'submit', className: 'w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-3 rounded-lg font-bold'}, 'Crea PR')
                                     )
+                                )
+                            )
+                        ),
+                        // Full Guest List Modal
+                        showFullGuestList && h('div', {className: 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4'},
+                            h('div', {className: 'bg-slate-800 border border-purple-500/30 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col'},
+                                h('div', {className: 'flex justify-between items-center mb-4'},
+                                    h('div', {},
+                                        h('h2', {className: 'text-xl font-bold text-white'}, '📋 Lista Completa Ospiti'),
+                                        h('p', {className: 'text-purple-300 text-sm'}, guestLists.length, ' ospiti totali • ', guestLists.filter(g => g.checkedIn).length, ' check-in')
+                                    ),
+                                    h('button', {className: 'text-purple-300', onClick: () => setShowFullGuestList(false)}, XIcon(24))
+                                ),
+                                h('div', {className: 'flex gap-2 mb-4'},
+                                    h('div', {className: 'bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-sm'}, '✓ Check-in: ', guestLists.filter(g => g.checkedIn).length),
+                                    h('div', {className: 'bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full text-sm'}, '⏳ In attesa: ', guestLists.filter(g => !g.checkedIn).length),
+                                    h('div', {className: 'bg-purple-500/20 text-purple-300 px-3 py-1 rounded-full text-sm'}, '👥 Persone: ', guestLists.reduce((sum, g) => sum + (g.guestCount || 1), 0))
+                                ),
+                                h('div', {className: 'overflow-y-auto flex-1'},
+                                    h('table', {className: 'w-full'},
+                                        h('thead', {className: 'bg-slate-900/50 sticky top-0'},
+                                            h('tr', {},
+                                                h('th', {className: 'text-left text-purple-300 text-sm font-bold px-3 py-2'}, 'Ospite'),
+                                                h('th', {className: 'text-left text-purple-300 text-sm font-bold px-3 py-2'}, 'PR'),
+                                                h('th', {className: 'text-center text-purple-300 text-sm font-bold px-3 py-2'}, 'Persone'),
+                                                h('th', {className: 'text-center text-purple-300 text-sm font-bold px-3 py-2'}, 'Stato')
+                                            )
+                                        ),
+                                        h('tbody', {},
+                                            guestLists.sort((a, b) => {
+                                                if (a.checkedIn !== b.checkedIn) return a.checkedIn ? 1 : -1;
+                                                return (a.guestName || '').localeCompare(b.guestName || '');
+                                            }).map(guest => {
+                                                const pr = prs.find(p => p.id === guest.prId);
+                                                return h('tr', {key: guest.id, className: 'border-b border-slate-700/50 ' + (guest.checkedIn ? 'opacity-60' : '')},
+                                                    h('td', {className: 'px-3 py-3'},
+                                                        h('span', {className: 'text-white font-medium'}, guest.guestName)
+                                                    ),
+                                                    h('td', {className: 'px-3 py-3'},
+                                                        h('span', {className: 'text-purple-300 text-sm'}, pr ? pr.name : '-')
+                                                    ),
+                                                    h('td', {className: 'px-3 py-3 text-center'},
+                                                        h('span', {className: 'text-cyan-300'}, guest.guestCount || 1)
+                                                    ),
+                                                    h('td', {className: 'px-3 py-3 text-center'},
+                                                        guest.checkedIn 
+                                                            ? h('span', {className: 'bg-green-500/20 text-green-300 px-2 py-1 rounded-full text-xs'}, '✓ Arrivato')
+                                                            : h('span', {className: 'bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded-full text-xs'}, '⏳ Atteso')
+                                                    )
+                                                );
+                                            })
+                                        )
+                                    ),
+                                    guestLists.length === 0 && h('p', {className: 'text-purple-300 text-center py-8'}, 'Nessun ospite nelle liste')
                                 )
                             )
                         )
