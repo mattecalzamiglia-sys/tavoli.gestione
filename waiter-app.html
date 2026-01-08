@@ -3,16 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@_muse.in_ - Cameriere</title>
+    <title>@_muse.in_ - Cameriere Pro</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
         .call-pulse { position: relative; }
         .call-pulse::before { content: ''; position: absolute; inset: -8px; border-radius: 12px; border: 2px solid #f97316; animation: pulse-ring 1.5s infinite; }
+        #qr-reader { width: 100%; }
+        #qr-reader video { width: 100% !important; border-radius: 12px; }
     </style>
 </head>
 <body>
@@ -26,112 +29,505 @@
             messagingSenderId: "299126578946",
             appId: "1:299126578946:web:2609823671a0eed056ac1b"
         });
-        const db = firebase.firestore();
-        const { useState, useEffect, useRef } = React;
-        const h = React.createElement;
+        var db = firebase.firestore();
+        var useState = React.useState;
+        var useEffect = React.useEffect;
+        var useRef = React.useRef;
+        var h = React.createElement;
 
         function App() {
-            const [event, setEvent] = useState(null);
-            const [tables, setTables] = useState([]);
-            const [orders, setOrders] = useState([]);
-            const [calls, setCalls] = useState([]);
-            const [bookings, setBookings] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState(null);
-            const [tab, setTab] = useState('calls');
-            const unsubs = useRef([]);
+            var _useState = useState(null), event = _useState[0], setEvent = _useState[1];
+            var _useState2 = useState([]), tables = _useState2[0], setTables = _useState2[1];
+            var _useState3 = useState([]), orders = _useState3[0], setOrders = _useState3[1];
+            var _useState4 = useState([]), calls = _useState4[0], setCalls = _useState4[1];
+            var _useState5 = useState([]), bookings = _useState5[0], setBookings = _useState5[1];
+            var _useState6 = useState([]), staff = _useState6[0], setStaff = _useState6[1];
+            var _useState7 = useState(true), loading = _useState7[0], setLoading = _useState7[1];
+            var _useState8 = useState(null), error = _useState8[0], setError = _useState8[1];
+            var _useState9 = useState('orders'), tab = _useState9[0], setTab = _useState9[1];
+            var _useState10 = useState(false), showScanner = _useState10[0], setShowScanner = _useState10[1];
+            var _useState11 = useState(null), scanResult = _useState11[0], setScanResult = _useState11[1];
+            var _useState12 = useState(null), currentStaff = _useState12[0], setCurrentStaff = _useState12[1];
+            var unsubs = useRef([]);
+            var scannerRef = useRef(null);
 
-            useEffect(() => {
-                const params = new URLSearchParams(window.location.search);
-                const eventId = params.get('event');
-                if (!eventId) { setError('Link non valido.'); setLoading(false); return; }
+            useEffect(function() {
+                var params = new URLSearchParams(window.location.search);
+                var eventId = params.get('event');
+                var staffId = params.get('staff');
+                
+                if (!eventId) { 
+                    setError('Link non valido. Manca event ID.'); 
+                    setLoading(false); 
+                    return; 
+                }
 
-                (async () => {
+                (async function() {
                     try {
-                        const eventDoc = await db.collection('events').doc(eventId).get();
-                        if (!eventDoc.exists) { setError('Evento non trovato.'); setLoading(false); return; }
+                        var eventDoc = await db.collection('events').doc(eventId).get();
+                        if (!eventDoc.exists) { 
+                            setError('Evento non trovato.'); 
+                            setLoading(false); 
+                            return; 
+                        }
                         setEvent({ id: eventDoc.id, ...eventDoc.data() });
 
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('tables').onSnapshot(s => setTables(s.docs.map(d => ({id:d.id,...d.data()})))));
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('bookings').onSnapshot(s => setBookings(s.docs.map(d => ({id:d.id,...d.data()})))));
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('orders').onSnapshot(s => setOrders(s.docs.map(d => ({id:d.id,...d.data()})))));
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('waiterCalls').where('status','==','pending').onSnapshot(s => setCalls(s.docs.map(d => ({id:d.id,...d.data()})))));
+                        // If staff ID provided, load staff member
+                        if (staffId) {
+                            var staffDoc = await db.collection('events').doc(eventId).collection('staff').doc(staffId).get();
+                            if (staffDoc.exists) {
+                                setCurrentStaff({ id: staffDoc.id, ...staffDoc.data() });
+                            }
+                        }
+
+                        // Real-time listeners
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('tables').onSnapshot(function(s) {
+                            setTables(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
+                        }));
+                        
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('bookings').onSnapshot(function(s) {
+                            setBookings(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
+                        }));
+                        
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('orders').onSnapshot(function(s) {
+                            setOrders(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
+                        }));
+                        
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('waiterCalls').where('status', '==', 'pending').onSnapshot(function(s) {
+                            setCalls(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
+                        }));
+
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('staff').onSnapshot(function(s) {
+                            setStaff(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
+                        }));
+
                         setLoading(false);
-                    } catch(e) { setError('Errore caricamento.'); setLoading(false); }
+                    } catch(e) { 
+                        console.error(e);
+                        setError('Errore caricamento.'); 
+                        setLoading(false); 
+                    }
                 })();
-                return () => unsubs.current.forEach(u => u());
+                
+                return function() { 
+                    unsubs.current.forEach(function(u) { u(); }); 
+                };
             }, []);
 
-            const clearCall = async (cid) => {
-                const params = new URLSearchParams(window.location.search);
-                await db.collection('events').doc(params.get('event')).collection('waiterCalls').doc(cid).update({status:'completed',completedAt:new Date().toISOString()});
+            // Clear waiter call
+            var clearCall = async function(cid) {
+                var params = new URLSearchParams(window.location.search);
+                var eventId = params.get('event');
+                await db.collection('events').doc(eventId).collection('waiterCalls').doc(cid).update({
+                    status: 'completed',
+                    completedAt: new Date().toISOString()
+                });
             };
 
-            const timeSince = (date) => { const d = Math.floor((new Date()-new Date(date))/1000/60); return d<1?'Ora':d<60?d+'m fa':Math.floor(d/60)+'h '+d%60+'m'; };
+            // Update order status
+            var updateOrderStatus = async function(orderId, newStatus) {
+                var params = new URLSearchParams(window.location.search);
+                var eventId = params.get('event');
+                await db.collection('events').doc(eventId).collection('orders').doc(orderId).update({
+                    status: newStatus,
+                    updatedAt: new Date().toISOString()
+                });
+            };
 
-            if (loading) return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center'}, h('div', {className: 'animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500'}));
-            if (error) return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4'}, h('div', {className: 'bg-red-500/20 border border-red-500/40 rounded-xl p-8 text-center'}, h('div', {className: 'text-6xl mb-4'}, '⚠️'), h('p', {className: 'text-red-300'}, error)));
+            // Handle QR scan for staff check-in/out
+            var handleQrScan = async function(decodedText) {
+                try {
+                    // Expected format: {"type":"staff-checkin","eventId":"xxx","staffId":"xxx"}
+                    var data = JSON.parse(decodedText);
+                    
+                    if (data.type === 'staff-checkin' && data.eventId && data.staffId) {
+                        var params = new URLSearchParams(window.location.search);
+                        var currentEventId = params.get('event');
+                        
+                        if (data.eventId !== currentEventId) {
+                            setScanResult({ success: false, message: 'QR code per evento diverso!' });
+                            return;
+                        }
+
+                        var staffDoc = await db.collection('events').doc(data.eventId).collection('staff').doc(data.staffId).get();
+                        
+                        if (!staffDoc.exists) {
+                            setScanResult({ success: false, message: 'Staff non trovato!' });
+                            return;
+                        }
+
+                        var staffData = staffDoc.data();
+                        var now = new Date().toISOString();
+                        var isCheckingIn = staffData.status === 'off-duty';
+
+                        await db.collection('events').doc(data.eventId).collection('staff').doc(data.staffId).update(
+                            isCheckingIn 
+                                ? { status: 'on-duty', checkInTime: now }
+                                : { status: 'off-duty', checkOutTime: now }
+                        );
+
+                        setScanResult({ 
+                            success: true, 
+                            message: staffData.name + ': ' + (isCheckingIn ? 'CHECK-IN ✓' : 'CHECK-OUT ✓'),
+                            staffName: staffData.name,
+                            action: isCheckingIn ? 'check-in' : 'check-out'
+                        });
+
+                        // Close scanner after 2 seconds
+                        setTimeout(function() {
+                            setShowScanner(false);
+                            setScanResult(null);
+                        }, 2000);
+                    } else {
+                        setScanResult({ success: false, message: 'QR code non valido' });
+                    }
+                } catch(e) {
+                    setScanResult({ success: false, message: 'Errore lettura QR' });
+                }
+            };
+
+            // Start QR scanner
+            useEffect(function() {
+                if (showScanner && !scannerRef.current) {
+                    setTimeout(function() {
+                        try {
+                            scannerRef.current = new Html5Qrcode("qr-reader");
+                            scannerRef.current.start(
+                                { facingMode: "environment" },
+                                { fps: 10, qrbox: { width: 250, height: 250 } },
+                                handleQrScan,
+                                function(err) { /* ignore */ }
+                            ).catch(function(err) {
+                                console.error("Scanner error:", err);
+                                setError("Impossibile accedere alla fotocamera");
+                            });
+                        } catch(e) {
+                            console.error("Scanner init error:", e);
+                        }
+                    }, 100);
+                }
+
+                return function() {
+                    if (scannerRef.current) {
+                        scannerRef.current.stop().catch(function() {});
+                        scannerRef.current = null;
+                    }
+                };
+            }, [showScanner]);
+
+            var timeSince = function(date) { 
+                var d = Math.floor((new Date() - new Date(date)) / 1000 / 60); 
+                return d < 1 ? 'Ora' : d < 60 ? d + 'm fa' : Math.floor(d/60) + 'h ' + (d % 60) + 'm'; 
+            };
+
+            var getStatusColor = function(status) {
+                switch(status) {
+                    case 'pending': return 'bg-yellow-500';
+                    case 'preparing': return 'bg-blue-500';
+                    case 'ready': return 'bg-green-500';
+                    case 'served': return 'bg-gray-500';
+                    default: return 'bg-yellow-500';
+                }
+            };
+
+            var getStatusText = function(status) {
+                switch(status) {
+                    case 'pending': return 'Nuovo';
+                    case 'preparing': return 'In preparazione';
+                    case 'ready': return 'Pronto';
+                    case 'served': return 'Servito';
+                    default: return 'Nuovo';
+                }
+            };
+
+            if (loading) {
+                return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center'},
+                    h('div', {className: 'animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-500'})
+                );
+            }
+
+            if (error) {
+                return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4'},
+                    h('div', {className: 'bg-red-500/20 border border-red-500/40 rounded-xl p-8 text-center'},
+                        h('div', {className: 'text-6xl mb-4'}, '⚠️'),
+                        h('p', {className: 'text-red-300'}, error)
+                    )
+                );
+            }
+
+            // Group orders by table and status
+            var pendingOrders = orders.filter(function(o) { return o.status === 'pending' || !o.status; });
+            var preparingOrders = orders.filter(function(o) { return o.status === 'preparing'; });
+            var readyOrders = orders.filter(function(o) { return o.status === 'ready'; });
 
             return h('div', {className: 'min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'},
+                // Header
                 h('header', {className: 'sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-purple-500/30 px-4 py-3 z-50'},
                     h('div', {className: 'flex justify-between items-center mb-3'},
-                        h('div', {}, h('h1', {className: 'text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400'}, '🍷 Cameriere'), h('p', {className: 'text-purple-300 text-xs'}, event?.name)),
-                        h('div', {className: 'text-green-400 text-xs'}, '● Real-time')
-                    ),
-                    h('div', {className: 'flex gap-2'},
-                        h('button', {onClick:()=>setTab('calls'), className:`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${tab==='calls'?'bg-orange-500 text-white':'bg-slate-800 text-purple-300'}`}, '🔔 Chiamate', calls.length>0 && h('span', {className:'bg-white text-orange-600 text-xs px-2 rounded-full'}, calls.length)),
-                        h('button', {onClick:()=>setTab('orders'), className:`flex-1 py-2 rounded-lg font-bold text-sm ${tab==='orders'?'bg-pink-500 text-white':'bg-slate-800 text-purple-300'}`}, '🍾 Ordini'),
-                        h('button', {onClick:()=>setTab('tables'), className:`flex-1 py-2 rounded-lg font-bold text-sm ${tab==='tables'?'bg-purple-500 text-white':'bg-slate-800 text-purple-300'}`}, '🪑 Tavoli')
-                    )
-                ),
-                h('main', {className: 'p-4 pb-24'},
-                    tab === 'calls' && h('div', {className: 'space-y-3'},
-                        calls.length === 0 ? h('div', {className: 'text-center py-16'}, h('div', {className: 'text-6xl mb-4'}, '🔔'), h('p', {className: 'text-white font-bold'}, 'Nessuna chiamata'), h('p', {className: 'text-purple-300 text-sm'}, 'Le chiamate appariranno qui'))
-                        : calls.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).map(call =>
-                            h('div', {key: call.id, className: 'call-pulse bg-orange-500/20 border-2 border-orange-400 rounded-xl p-4'},
-                                h('div', {className: 'flex justify-between items-start mb-3'},
-                                    h('div', {}, h('span', {className: 'text-3xl font-black text-white'}, 'Tavolo ', call.tableNumber), h('p', {className: 'text-orange-200 text-sm mt-1'}, timeSince(call.createdAt))),
-                                    h('span', {className: 'text-2xl'}, '🔔')
-                                ),
-                                h('button', {onClick: ()=>clearCall(call.id), className: 'w-full bg-green-500 text-white py-3 rounded-lg font-bold text-lg'}, '✓ Servito')
-                            )
+                        h('div', {},
+                            h('h1', {className: 'text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400'}, '🍷 Cameriere Pro'),
+                            h('p', {className: 'text-purple-300 text-xs'}, event ? event.name : '')
+                        ),
+                        h('div', {className: 'flex items-center gap-2'},
+                            h('div', {className: 'text-green-400 text-xs'}, '● Live'),
+                            h('button', {
+                                onClick: function() { setShowScanner(true); },
+                                className: 'bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-bold'
+                            }, '📷 QR')
                         )
                     ),
-                    tab === 'orders' && h('div', {className: 'space-y-3'},
-                        h('h2', {className: 'text-white font-bold'}, 'Ordini Recenti'),
-                        orders.length === 0 ? h('p', {className: 'text-purple-300 text-center py-16'}, 'Nessun ordine')
-                        : [...orders].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,30).map(order => {
-                            const table = tables.find(t => t.id === order.tableId);
-                            return h('div', {key: order.id, className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-4'},
-                                h('div', {className: 'flex justify-between items-start mb-2'},
-                                    h('div', {}, h('span', {className: 'text-white font-bold'}, 'Tavolo ', table?.number||'?'), h('p', {className: 'text-purple-300 text-xs'}, timeSince(order.createdAt))),
-                                    h('span', {className: 'text-yellow-400 font-bold'}, '€', order.total?.toFixed(2))
-                                ),
-                                h('div', {className: 'bg-slate-900/50 rounded-lg p-2 text-white'}, order.quantity, 'x ', order.productName)
+                    // Tabs
+                    h('div', {className: 'flex gap-2'},
+                        h('button', {
+                            onClick: function() { setTab('orders'); },
+                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'orders' ? 'bg-pink-500 text-white' : 'bg-slate-800 text-purple-300')
+                        }, '🍾 Ordini ', pendingOrders.length > 0 ? h('span', {className: 'bg-white text-pink-600 text-xs px-2 rounded-full ml-1'}, pendingOrders.length) : null),
+                        h('button', {
+                            onClick: function() { setTab('calls'); },
+                            className: 'flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-1 ' + (tab === 'calls' ? 'bg-orange-500 text-white' : 'bg-slate-800 text-purple-300')
+                        }, '🔔 Chiamate ', calls.length > 0 ? h('span', {className: 'bg-white text-orange-600 text-xs px-2 rounded-full'}, calls.length) : null),
+                        h('button', {
+                            onClick: function() { setTab('tables'); },
+                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'tables' ? 'bg-purple-500 text-white' : 'bg-slate-800 text-purple-300')
+                        }, '🪑 Tavoli'),
+                        h('button', {
+                            onClick: function() { setTab('staff'); },
+                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'staff' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-purple-300')
+                        }, '👤 Staff')
+                    )
+                ),
+
+                // Main content
+                h('main', {className: 'p-4 pb-24'},
+                    // ORDERS TAB
+                    tab === 'orders' && h('div', {className: 'space-y-4'},
+                        // Pending orders
+                        h('div', {},
+                            h('h2', {className: 'text-white font-bold mb-3 flex items-center gap-2'}, 
+                                h('span', {className: 'w-3 h-3 rounded-full bg-yellow-500'}), 
+                                'Nuovi Ordini (', pendingOrders.length, ')'
+                            ),
+                            pendingOrders.length === 0 
+                                ? h('p', {className: 'text-purple-300 text-center py-4 bg-slate-800/30 rounded-xl'}, 'Nessun ordine in attesa')
+                                : pendingOrders.sort(function(a,b) { return new Date(a.createdAt) - new Date(b.createdAt); }).map(function(order) {
+                                    var table = tables.find(function(t) { return t.id === order.tableId; });
+                                    return h('div', {key: order.id, className: 'bg-yellow-500/20 border-2 border-yellow-400 rounded-xl p-4 mb-3'},
+                                        h('div', {className: 'flex justify-between items-start mb-3'},
+                                            h('div', {},
+                                                h('span', {className: 'text-2xl font-black text-white'}, 'Tavolo ', table ? table.number : '?'),
+                                                h('p', {className: 'text-yellow-200 text-sm'}, timeSince(order.createdAt))
+                                            ),
+                                            h('span', {className: 'bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-bold'}, 'NUOVO')
+                                        ),
+                                        h('div', {className: 'bg-slate-900/50 rounded-lg p-3 mb-3'},
+                                            h('div', {className: 'text-white font-bold text-lg'}, order.quantity, 'x ', order.productName),
+                                            h('div', {className: 'text-yellow-300'}, '€', order.total ? order.total.toFixed(2) : '0.00')
+                                        ),
+                                        h('div', {className: 'flex gap-2'},
+                                            h('button', {
+                                                onClick: function() { updateOrderStatus(order.id, 'preparing'); },
+                                                className: 'flex-1 bg-blue-500 text-white py-2 rounded-lg font-bold'
+                                            }, '👨‍🍳 In Preparazione'),
+                                            h('button', {
+                                                onClick: function() { updateOrderStatus(order.id, 'served'); },
+                                                className: 'flex-1 bg-green-500 text-white py-2 rounded-lg font-bold'
+                                            }, '✓ Servito')
+                                        )
+                                    );
+                                })
+                        ),
+
+                        // Preparing orders
+                        preparingOrders.length > 0 && h('div', {},
+                            h('h2', {className: 'text-white font-bold mb-3 flex items-center gap-2'}, 
+                                h('span', {className: 'w-3 h-3 rounded-full bg-blue-500'}), 
+                                'In Preparazione (', preparingOrders.length, ')'
+                            ),
+                            preparingOrders.map(function(order) {
+                                var table = tables.find(function(t) { return t.id === order.tableId; });
+                                return h('div', {key: order.id, className: 'bg-blue-500/20 border border-blue-400/50 rounded-xl p-4 mb-3'},
+                                    h('div', {className: 'flex justify-between items-center'},
+                                        h('div', {},
+                                            h('span', {className: 'text-white font-bold'}, 'Tavolo ', table ? table.number : '?'),
+                                            h('span', {className: 'text-blue-300 ml-2'}, order.quantity, 'x ', order.productName)
+                                        ),
+                                        h('div', {className: 'flex gap-2'},
+                                            h('button', {
+                                                onClick: function() { updateOrderStatus(order.id, 'ready'); },
+                                                className: 'bg-green-500 text-white px-3 py-1 rounded-lg text-sm font-bold'
+                                            }, '✓ Pronto'),
+                                            h('button', {
+                                                onClick: function() { updateOrderStatus(order.id, 'served'); },
+                                                className: 'bg-gray-500 text-white px-3 py-1 rounded-lg text-sm font-bold'
+                                            }, 'Servito')
+                                        )
+                                    )
+                                );
+                            })
+                        ),
+
+                        // Ready orders
+                        readyOrders.length > 0 && h('div', {},
+                            h('h2', {className: 'text-white font-bold mb-3 flex items-center gap-2'}, 
+                                h('span', {className: 'w-3 h-3 rounded-full bg-green-500 animate-pulse'}), 
+                                'Pronti da Servire (', readyOrders.length, ')'
+                            ),
+                            readyOrders.map(function(order) {
+                                var table = tables.find(function(t) { return t.id === order.tableId; });
+                                return h('div', {key: order.id, className: 'bg-green-500/20 border-2 border-green-400 rounded-xl p-4 mb-3'},
+                                    h('div', {className: 'flex justify-between items-center'},
+                                        h('div', {},
+                                            h('span', {className: 'text-xl font-black text-white'}, '📍 Tavolo ', table ? table.number : '?'),
+                                            h('p', {className: 'text-green-300'}, order.quantity, 'x ', order.productName)
+                                        ),
+                                        h('button', {
+                                            onClick: function() { updateOrderStatus(order.id, 'served'); },
+                                            className: 'bg-green-500 text-white px-4 py-2 rounded-lg font-bold'
+                                        }, '✓ Consegnato')
+                                    )
+                                );
+                            })
+                        )
+                    ),
+
+                    // CALLS TAB
+                    tab === 'calls' && h('div', {className: 'space-y-3'},
+                        calls.length === 0 
+                            ? h('div', {className: 'text-center py-16'},
+                                h('div', {className: 'text-6xl mb-4'}, '🔔'),
+                                h('p', {className: 'text-white font-bold'}, 'Nessuna chiamata'),
+                                h('p', {className: 'text-purple-300 text-sm'}, 'Le chiamate appariranno qui')
+                            )
+                            : calls.sort(function(a,b) { return new Date(a.createdAt) - new Date(b.createdAt); }).map(function(call) {
+                                return h('div', {key: call.id, className: 'call-pulse bg-orange-500/20 border-2 border-orange-400 rounded-xl p-4'},
+                                    h('div', {className: 'flex justify-between items-start mb-3'},
+                                        h('div', {},
+                                            h('span', {className: 'text-3xl font-black text-white'}, 'Tavolo ', call.tableNumber),
+                                            h('p', {className: 'text-orange-200 text-sm mt-1'}, timeSince(call.createdAt))
+                                        ),
+                                        h('span', {className: 'text-2xl'}, '🔔')
+                                    ),
+                                    h('button', {
+                                        onClick: function() { clearCall(call.id); },
+                                        className: 'w-full bg-green-500 text-white py-3 rounded-lg font-bold text-lg'
+                                    }, '✓ Servito')
+                                );
+                            })
+                    ),
+
+                    // TABLES TAB
+                    tab === 'tables' && h('div', {className: 'space-y-3'},
+                        tables.sort(function(a,b) { return a.number - b.number; }).map(function(table) {
+                            var booking = bookings.find(function(b) { return b.tableId === table.id; });
+                            var tableOrders = orders.filter(function(o) { return o.tableId === table.id; });
+                            var pendingCount = tableOrders.filter(function(o) { return !o.status || o.status === 'pending'; }).length;
+                            var total = tableOrders.reduce(function(s, o) { return s + (o.total || 0); }, 0);
+                            var hasCall = calls.some(function(c) { return c.tableId === table.id; });
+                            
+                            return h('div', {key: table.id, className: 'rounded-xl p-4 border-2 ' + (hasCall ? 'bg-orange-500/20 border-orange-400' : booking ? 'bg-green-500/10 border-green-500/40' : 'bg-slate-800/50 border-purple-500/30')},
+                                h('div', {className: 'flex justify-between items-start'},
+                                    h('div', {},
+                                        h('span', {className: 'text-white font-bold text-xl'}, 'Tavolo ', table.number, hasCall ? ' 🔔' : ''),
+                                        booking 
+                                            ? h('p', {className: 'text-green-300 text-sm'}, '👤 ', booking.guestName)
+                                            : h('p', {className: 'text-purple-400 text-sm'}, 'Libero • ', table.capacity, ' posti'),
+                                        pendingCount > 0 && h('p', {className: 'text-yellow-400 text-sm font-bold'}, '⏳ ', pendingCount, ' ordini in attesa')
+                                    ),
+                                    total > 0 && h('div', {className: 'text-right'},
+                                        h('div', {className: 'text-yellow-400 font-bold'}, '€', total.toFixed(2)),
+                                        h('div', {className: 'text-purple-300 text-xs'}, tableOrders.length, ' ordini')
+                                    )
+                                )
                             );
                         })
                     ),
-                    tab === 'tables' && h('div', {className: 'space-y-3'},
-                        tables.sort((a,b)=>a.number-b.number).map(table => {
-                            const booking = bookings.find(b => b.tableId === table.id);
-                            const tableOrders = orders.filter(o => o.tableId === table.id);
-                            const total = tableOrders.reduce((s,o) => s+(o.total||0), 0);
-                            const hasCall = calls.some(c => c.tableId === table.id);
-                            return h('div', {key: table.id, className: `rounded-xl p-4 border-2 ${hasCall?'bg-orange-500/20 border-orange-400':booking?'bg-green-500/10 border-green-500/40':'bg-slate-800/50 border-purple-500/30'}`},
-                                h('div', {className: 'flex justify-between items-start'},
+
+                    // STAFF TAB
+                    tab === 'staff' && h('div', {className: 'space-y-3'},
+                        h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-4 mb-4'},
+                            h('div', {className: 'flex justify-between items-center'},
+                                h('div', {},
+                                    h('h3', {className: 'text-white font-bold'}, 'Check-in/out Staff'),
+                                    h('p', {className: 'text-purple-300 text-sm'}, 'Scansiona il QR del badge')
+                                ),
+                                h('button', {
+                                    onClick: function() { setShowScanner(true); },
+                                    className: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white px-4 py-3 rounded-lg font-bold'
+                                }, '📷 Scansiona QR')
+                            )
+                        ),
+                        h('h2', {className: 'text-white font-bold mb-3'}, 'Staff in Servizio'),
+                        staff.filter(function(s) { return s.status === 'on-duty'; }).length === 0
+                            ? h('p', {className: 'text-purple-300 text-center py-4'}, 'Nessuno in servizio')
+                            : staff.filter(function(s) { return s.status === 'on-duty'; }).map(function(member) {
+                                var checkIn = member.checkInTime ? new Date(member.checkInTime) : null;
+                                var hours = checkIn ? ((new Date() - checkIn) / (1000 * 60 * 60)).toFixed(1) : 0;
+                                return h('div', {key: member.id, className: 'bg-green-500/10 border border-green-400/40 rounded-xl p-4'},
+                                    h('div', {className: 'flex justify-between items-center'},
+                                        h('div', {className: 'flex items-center gap-3'},
+                                            h('div', {className: 'w-3 h-3 rounded-full bg-green-400 animate-pulse'}),
+                                            h('div', {},
+                                                h('div', {className: 'text-white font-bold'}, member.name),
+                                                h('div', {className: 'text-green-300 text-sm'}, member.role)
+                                            )
+                                        ),
+                                        h('div', {className: 'text-right'},
+                                            h('div', {className: 'text-white font-bold'}, hours, 'h'),
+                                            checkIn && h('div', {className: 'text-purple-300 text-xs'}, 'dalle ', checkIn.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}))
+                                        )
+                                    )
+                                );
+                            }),
+                        
+                        h('h2', {className: 'text-white font-bold mb-3 mt-6'}, 'Non in Servizio'),
+                        staff.filter(function(s) { return s.status !== 'on-duty'; }).map(function(member) {
+                            return h('div', {key: member.id, className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-4'},
+                                h('div', {className: 'flex items-center gap-3'},
+                                    h('div', {className: 'w-3 h-3 rounded-full bg-slate-500'}),
                                     h('div', {},
-                                        h('span', {className: 'text-white font-bold text-xl'}, 'Tavolo ', table.number, hasCall && ' 🔔'),
-                                        booking ? h('p', {className: 'text-green-300 text-sm'}, '👤 ', booking.guestName) : h('p', {className: 'text-purple-400 text-sm'}, 'Libero • ', table.capacity, ' posti')
-                                    ),
-                                    total > 0 && h('div', {className: 'text-right'}, h('div', {className: 'text-yellow-400 font-bold'}, '€', total.toFixed(2)), h('div', {className: 'text-purple-300 text-xs'}, tableOrders.length, ' ordini'))
+                                        h('div', {className: 'text-white font-bold'}, member.name),
+                                        h('div', {className: 'text-purple-300 text-sm'}, member.role)
+                                    )
                                 )
                             );
                         })
                     )
                 ),
-                calls.length > 0 && tab !== 'calls' && h('button', {onClick:()=>setTab('calls'), className: 'fixed bottom-6 right-6 bg-orange-500 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-2 animate-bounce'}, '🔔 ', calls.length)
+
+                // QR Scanner Modal
+                showScanner && h('div', {className: 'fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4'},
+                    h('div', {className: 'bg-slate-800 border border-purple-500/30 rounded-xl p-6 w-full max-w-md'},
+                        h('div', {className: 'flex justify-between items-center mb-4'},
+                            h('h2', {className: 'text-xl font-bold text-white'}, '📷 Scansiona Badge'),
+                            h('button', {
+                                onClick: function() { 
+                                    setShowScanner(false); 
+                                    setScanResult(null);
+                                    if (scannerRef.current) {
+                                        scannerRef.current.stop().catch(function() {});
+                                        scannerRef.current = null;
+                                    }
+                                },
+                                className: 'text-purple-300 text-2xl'
+                            }, '✕')
+                        ),
+                        !scanResult && h('div', {id: 'qr-reader', className: 'mb-4'}),
+                        scanResult && h('div', {className: 'text-center py-8 ' + (scanResult.success ? 'bg-green-500/20' : 'bg-red-500/20') + ' rounded-xl'},
+                            h('div', {className: 'text-6xl mb-4'}, scanResult.success ? '✓' : '✕'),
+                            h('p', {className: scanResult.success ? 'text-green-300 text-xl font-bold' : 'text-red-300 text-lg'}, scanResult.message)
+                        ),
+                        h('p', {className: 'text-purple-300 text-sm text-center'}, 'Inquadra il QR code del badge staff')
+                    )
+                ),
+
+                // Floating notification for calls
+                calls.length > 0 && tab !== 'calls' && h('button', {
+                    onClick: function() { setTab('calls'); },
+                    className: 'fixed bottom-6 right-6 bg-orange-500 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-2 animate-bounce'
+                }, '🔔 ', calls.length)
             );
         }
+
         ReactDOM.render(h(App), document.getElementById('root'));
     </script>
 </body>
