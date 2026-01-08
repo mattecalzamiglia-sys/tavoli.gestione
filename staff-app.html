@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@_muse.in_ - Cameriere Pro</title>
+    <title>@_muse.in_ - Staff</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -36,34 +36,42 @@
         var h = React.createElement;
 
         function App() {
-            var _useState = useState(null), event = _useState[0], setEvent = _useState[1];
-            var _useState2 = useState([]), tables = _useState2[0], setTables = _useState2[1];
-            var _useState3 = useState([]), orders = _useState3[0], setOrders = _useState3[1];
-            var _useState4 = useState([]), calls = _useState4[0], setCalls = _useState4[1];
-            var _useState5 = useState([]), bookings = _useState5[0], setBookings = _useState5[1];
-            var _useState6 = useState([]), staff = _useState6[0], setStaff = _useState6[1];
-            var _useState7 = useState(true), loading = _useState7[0], setLoading = _useState7[1];
-            var _useState8 = useState(null), error = _useState8[0], setError = _useState8[1];
-            var _useState9 = useState('orders'), tab = _useState9[0], setTab = _useState9[1];
-            var _useState10 = useState(false), showScanner = _useState10[0], setShowScanner = _useState10[1];
-            var _useState11 = useState(null), scanResult = _useState11[0], setScanResult = _useState11[1];
-            var _useState12 = useState(null), currentStaff = _useState12[0], setCurrentStaff = _useState12[1];
+            var _s1 = useState(null), event = _s1[0], setEvent = _s1[1];
+            var _s2 = useState(null), currentStaff = _s2[0], setCurrentStaff = _s2[1];
+            var _s3 = useState([]), tables = _s3[0], setTables = _s3[1];
+            var _s4 = useState([]), orders = _s4[0], setOrders = _s4[1];
+            var _s5 = useState([]), calls = _s5[0], setCalls = _s5[1];
+            var _s6 = useState([]), bookings = _s6[0], setBookings = _s6[1];
+            var _s7 = useState(true), loading = _s7[0], setLoading = _s7[1];
+            var _s8 = useState(null), error = _s8[0], setError = _s8[1];
+            var _s9 = useState('status'), tab = _s9[0], setTab = _s9[1];
+            var _s10 = useState(false), showScanner = _s10[0], setShowScanner = _s10[1];
+            var _s11 = useState(null), scanResult = _s11[0], setScanResult = _s11[1];
             var unsubs = useRef([]);
             var scannerRef = useRef(null);
+
+            // Check if staff is a waiter (cameriere)
+            var isWaiter = currentStaff && (
+                currentStaff.role.toLowerCase() === 'cameriere' || 
+                currentStaff.role.toLowerCase() === 'cameriera' ||
+                currentStaff.role.toLowerCase() === 'waiter' ||
+                currentStaff.role.toLowerCase() === 'waitress'
+            );
 
             useEffect(function() {
                 var params = new URLSearchParams(window.location.search);
                 var eventId = params.get('event');
                 var staffId = params.get('staff');
                 
-                if (!eventId) { 
-                    setError('Link non valido. Manca event ID.'); 
+                if (!eventId || !staffId) { 
+                    setError('Link non valido.'); 
                     setLoading(false); 
                     return; 
                 }
 
                 (async function() {
                     try {
+                        // Load event
                         var eventDoc = await db.collection('events').doc(eventId).get();
                         if (!eventDoc.exists) { 
                             setError('Evento non trovato.'); 
@@ -72,15 +80,16 @@
                         }
                         setEvent({ id: eventDoc.id, ...eventDoc.data() });
 
-                        // If staff ID provided, load staff member
-                        if (staffId) {
-                            var staffDoc = await db.collection('events').doc(eventId).collection('staff').doc(staffId).get();
-                            if (staffDoc.exists) {
-                                setCurrentStaff({ id: staffDoc.id, ...staffDoc.data() });
-                            }
+                        // Load staff member
+                        var staffDoc = await db.collection('events').doc(eventId).collection('staff').doc(staffId).get();
+                        if (!staffDoc.exists) { 
+                            setError('Staff non trovato.'); 
+                            setLoading(false); 
+                            return; 
                         }
+                        setCurrentStaff({ id: staffDoc.id, ...staffDoc.data() });
 
-                        // Real-time listeners
+                        // Real-time listeners (needed for waiters)
                         unsubs.current.push(db.collection('events').doc(eventId).collection('tables').onSnapshot(function(s) {
                             setTables(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
                         }));
@@ -97,8 +106,11 @@
                             setCalls(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
                         }));
 
-                        unsubs.current.push(db.collection('events').doc(eventId).collection('staff').onSnapshot(function(s) {
-                            setStaff(s.docs.map(function(d) { return {id: d.id, ...d.data()}; }));
+                        // Listen for staff updates (for check-in status)
+                        unsubs.current.push(db.collection('events').doc(eventId).collection('staff').doc(staffId).onSnapshot(function(doc) {
+                            if (doc.exists) {
+                                setCurrentStaff({ id: doc.id, ...doc.data() });
+                            }
                         }));
 
                         setLoading(false);
@@ -113,6 +125,20 @@
                     unsubs.current.forEach(function(u) { u(); }); 
                 };
             }, []);
+
+            // Toggle check-in/out for current staff
+            var toggleMyCheckIn = async function() {
+                var params = new URLSearchParams(window.location.search);
+                var eventId = params.get('event');
+                var now = new Date().toISOString();
+                var isCheckingIn = currentStaff.status === 'off-duty' || !currentStaff.status;
+
+                await db.collection('events').doc(eventId).collection('staff').doc(currentStaff.id).update(
+                    isCheckingIn 
+                        ? { status: 'on-duty', checkInTime: now }
+                        : { status: 'off-duty', checkOutTime: now }
+                );
+            };
 
             // Clear waiter call
             var clearCall = async function(cid) {
@@ -134,110 +160,16 @@
                 });
             };
 
-            // Handle QR scan for staff check-in/out
-            var handleQrScan = async function(decodedText) {
-                try {
-                    // Expected format: {"type":"staff-checkin","eventId":"xxx","staffId":"xxx"}
-                    var data = JSON.parse(decodedText);
-                    
-                    if (data.type === 'staff-checkin' && data.eventId && data.staffId) {
-                        var params = new URLSearchParams(window.location.search);
-                        var currentEventId = params.get('event');
-                        
-                        if (data.eventId !== currentEventId) {
-                            setScanResult({ success: false, message: 'QR code per evento diverso!' });
-                            return;
-                        }
-
-                        var staffDoc = await db.collection('events').doc(data.eventId).collection('staff').doc(data.staffId).get();
-                        
-                        if (!staffDoc.exists) {
-                            setScanResult({ success: false, message: 'Staff non trovato!' });
-                            return;
-                        }
-
-                        var staffData = staffDoc.data();
-                        var now = new Date().toISOString();
-                        var isCheckingIn = staffData.status === 'off-duty';
-
-                        await db.collection('events').doc(data.eventId).collection('staff').doc(data.staffId).update(
-                            isCheckingIn 
-                                ? { status: 'on-duty', checkInTime: now }
-                                : { status: 'off-duty', checkOutTime: now }
-                        );
-
-                        setScanResult({ 
-                            success: true, 
-                            message: staffData.name + ': ' + (isCheckingIn ? 'CHECK-IN ✓' : 'CHECK-OUT ✓'),
-                            staffName: staffData.name,
-                            action: isCheckingIn ? 'check-in' : 'check-out'
-                        });
-
-                        // Close scanner after 2 seconds
-                        setTimeout(function() {
-                            setShowScanner(false);
-                            setScanResult(null);
-                        }, 2000);
-                    } else {
-                        setScanResult({ success: false, message: 'QR code non valido' });
-                    }
-                } catch(e) {
-                    setScanResult({ success: false, message: 'Errore lettura QR' });
-                }
-            };
-
-            // Start QR scanner
-            useEffect(function() {
-                if (showScanner && !scannerRef.current) {
-                    setTimeout(function() {
-                        try {
-                            scannerRef.current = new Html5Qrcode("qr-reader");
-                            scannerRef.current.start(
-                                { facingMode: "environment" },
-                                { fps: 10, qrbox: { width: 250, height: 250 } },
-                                handleQrScan,
-                                function(err) { /* ignore */ }
-                            ).catch(function(err) {
-                                console.error("Scanner error:", err);
-                                setError("Impossibile accedere alla fotocamera");
-                            });
-                        } catch(e) {
-                            console.error("Scanner init error:", e);
-                        }
-                    }, 100);
-                }
-
-                return function() {
-                    if (scannerRef.current) {
-                        scannerRef.current.stop().catch(function() {});
-                        scannerRef.current = null;
-                    }
-                };
-            }, [showScanner]);
-
             var timeSince = function(date) { 
                 var d = Math.floor((new Date() - new Date(date)) / 1000 / 60); 
                 return d < 1 ? 'Ora' : d < 60 ? d + 'm fa' : Math.floor(d/60) + 'h ' + (d % 60) + 'm'; 
             };
 
-            var getStatusColor = function(status) {
-                switch(status) {
-                    case 'pending': return 'bg-yellow-500';
-                    case 'preparing': return 'bg-blue-500';
-                    case 'ready': return 'bg-green-500';
-                    case 'served': return 'bg-gray-500';
-                    default: return 'bg-yellow-500';
-                }
-            };
-
-            var getStatusText = function(status) {
-                switch(status) {
-                    case 'pending': return 'Nuovo';
-                    case 'preparing': return 'In preparazione';
-                    case 'ready': return 'Pronto';
-                    case 'served': return 'Servito';
-                    default: return 'Nuovo';
-                }
+            var getWorkedHours = function() {
+                if (!currentStaff || !currentStaff.checkInTime) return 0;
+                var checkIn = new Date(currentStaff.checkInTime);
+                var checkOut = currentStaff.checkOutTime ? new Date(currentStaff.checkOutTime) : new Date();
+                return ((checkOut - checkIn) / (1000 * 60 * 60)).toFixed(1);
             };
 
             if (loading) {
@@ -255,7 +187,7 @@
                 );
             }
 
-            // Group orders by table and status
+            var isOnDuty = currentStaff.status === 'on-duty';
             var pendingOrders = orders.filter(function(o) { return o.status === 'pending' || !o.status; });
             var preparingOrders = orders.filter(function(o) { return o.status === 'preparing'; });
             var readyOrders = orders.filter(function(o) { return o.status === 'ready'; });
@@ -265,19 +197,19 @@
                 h('header', {className: 'sticky top-0 bg-slate-900/95 backdrop-blur-sm border-b border-purple-500/30 px-4 py-3 z-50'},
                     h('div', {className: 'flex justify-between items-center mb-3'},
                         h('div', {},
-                            h('h1', {className: 'text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400'}, '🍷 Cameriere Pro'),
-                            h('p', {className: 'text-purple-300 text-xs'}, event ? event.name : '')
+                            h('h1', {className: 'text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-cyan-400'}, currentStaff.name),
+                            h('p', {className: 'text-purple-300 text-xs'}, currentStaff.role, ' • ', event ? event.name : '')
                         ),
                         h('div', {className: 'flex items-center gap-2'},
-                            h('div', {className: 'text-green-400 text-xs'}, '● Live'),
-                            h('button', {
-                                onClick: function() { setShowScanner(true); },
-                                className: 'bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-bold'
-                            }, '📷 QR')
+                            h('div', {className: isOnDuty ? 'text-green-400 text-xs' : 'text-slate-400 text-xs'}, isOnDuty ? '● In servizio' : '○ Fuori servizio')
                         )
                     ),
-                    // Tabs
-                    h('div', {className: 'flex gap-2'},
+                    // Tabs - different based on role
+                    isWaiter ? h('div', {className: 'flex gap-2'},
+                        h('button', {
+                            onClick: function() { setTab('status'); },
+                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'status' ? 'bg-purple-500 text-white' : 'bg-slate-800 text-purple-300')
+                        }, '👤 Stato'),
                         h('button', {
                             onClick: function() { setTab('orders'); },
                             className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'orders' ? 'bg-pink-500 text-white' : 'bg-slate-800 text-purple-300')
@@ -285,22 +217,66 @@
                         h('button', {
                             onClick: function() { setTab('calls'); },
                             className: 'flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-1 ' + (tab === 'calls' ? 'bg-orange-500 text-white' : 'bg-slate-800 text-purple-300')
-                        }, '🔔 Chiamate ', calls.length > 0 ? h('span', {className: 'bg-white text-orange-600 text-xs px-2 rounded-full'}, calls.length) : null),
+                        }, '🔔 ', calls.length > 0 ? h('span', {className: 'bg-white text-orange-600 text-xs px-2 rounded-full'}, calls.length) : '0'),
                         h('button', {
                             onClick: function() { setTab('tables'); },
-                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'tables' ? 'bg-purple-500 text-white' : 'bg-slate-800 text-purple-300')
-                        }, '🪑 Tavoli'),
-                        h('button', {
-                            onClick: function() { setTab('staff'); },
-                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'staff' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-purple-300')
-                        }, '👤 Staff')
-                    )
+                            className: 'flex-1 py-2 rounded-lg font-bold text-sm ' + (tab === 'tables' ? 'bg-cyan-500 text-white' : 'bg-slate-800 text-purple-300')
+                        }, '🪑')
+                    ) : null
                 ),
 
                 // Main content
                 h('main', {className: 'p-4 pb-24'},
-                    // ORDERS TAB
-                    tab === 'orders' && h('div', {className: 'space-y-4'},
+                    // STATUS TAB (everyone sees this)
+                    tab === 'status' && h('div', {className: 'space-y-6'},
+                        // Check-in/out card
+                        h('div', {className: 'bg-slate-800/50 border-2 ' + (isOnDuty ? 'border-green-500' : 'border-purple-500/30') + ' rounded-xl p-6 text-center'},
+                            h('div', {className: 'text-6xl mb-4'}, isOnDuty ? '✅' : '🔘'),
+                            h('h2', {className: 'text-2xl font-bold text-white mb-2'}, isOnDuty ? 'Sei in Servizio' : 'Non in Servizio'),
+                            isOnDuty && currentStaff.checkInTime && h('p', {className: 'text-green-300 mb-2'}, 
+                                'Dalle ', new Date(currentStaff.checkInTime).toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}),
+                                ' • ', getWorkedHours(), 'h'
+                            ),
+                            h('button', {
+                                onClick: toggleMyCheckIn,
+                                className: 'w-full py-4 rounded-xl font-bold text-xl mt-4 ' + (isOnDuty ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white')
+                            }, isOnDuty ? '⏹ CHECK-OUT' : '▶ CHECK-IN')
+                        ),
+
+                        // Today stats (for waiters)
+                        isWaiter && h('div', {className: 'grid grid-cols-3 gap-3'},
+                            h('div', {className: 'bg-pink-500/20 rounded-xl p-4 text-center'},
+                                h('div', {className: 'text-pink-300 text-xs'}, 'Ordini'),
+                                h('div', {className: 'text-white font-bold text-2xl'}, orders.length)
+                            ),
+                            h('div', {className: 'bg-orange-500/20 rounded-xl p-4 text-center'},
+                                h('div', {className: 'text-orange-300 text-xs'}, 'Chiamate'),
+                                h('div', {className: 'text-white font-bold text-2xl'}, calls.length)
+                            ),
+                            h('div', {className: 'bg-yellow-500/20 rounded-xl p-4 text-center'},
+                                h('div', {className: 'text-yellow-300 text-xs'}, 'Ore'),
+                                h('div', {className: 'text-white font-bold text-2xl'}, getWorkedHours())
+                            )
+                        ),
+
+                        // Quick summary for non-waiters
+                        !isWaiter && h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                            h('h3', {className: 'text-white font-bold mb-4'}, '📊 Il tuo turno'),
+                            h('div', {className: 'space-y-3'},
+                                h('div', {className: 'flex justify-between'}, 
+                                    h('span', {className: 'text-purple-300'}, 'Ore lavorate'),
+                                    h('span', {className: 'text-white font-bold'}, getWorkedHours(), 'h')
+                                ),
+                                currentStaff.hourlyRate && h('div', {className: 'flex justify-between'}, 
+                                    h('span', {className: 'text-purple-300'}, 'Guadagno stimato'),
+                                    h('span', {className: 'text-green-400 font-bold'}, '€', (getWorkedHours() * currentStaff.hourlyRate).toFixed(2))
+                                )
+                            )
+                        )
+                    ),
+
+                    // ORDERS TAB (waiters only)
+                    tab === 'orders' && isWaiter && h('div', {className: 'space-y-4'},
                         // Pending orders
                         h('div', {},
                             h('h2', {className: 'text-white font-bold mb-3 flex items-center gap-2'}, 
@@ -327,7 +303,7 @@
                                             h('button', {
                                                 onClick: function() { updateOrderStatus(order.id, 'preparing'); },
                                                 className: 'flex-1 bg-blue-500 text-white py-2 rounded-lg font-bold'
-                                            }, '👨‍🍳 In Preparazione'),
+                                            }, '👨‍🍳 Prepara'),
                                             h('button', {
                                                 onClick: function() { updateOrderStatus(order.id, 'served'); },
                                                 className: 'flex-1 bg-green-500 text-white py-2 rounded-lg font-bold'
@@ -351,16 +327,10 @@
                                             h('span', {className: 'text-white font-bold'}, 'Tavolo ', table ? table.number : '?'),
                                             h('span', {className: 'text-blue-300 ml-2'}, order.quantity, 'x ', order.productName)
                                         ),
-                                        h('div', {className: 'flex gap-2'},
-                                            h('button', {
-                                                onClick: function() { updateOrderStatus(order.id, 'ready'); },
-                                                className: 'bg-green-500 text-white px-3 py-1 rounded-lg text-sm font-bold'
-                                            }, '✓ Pronto'),
-                                            h('button', {
-                                                onClick: function() { updateOrderStatus(order.id, 'served'); },
-                                                className: 'bg-gray-500 text-white px-3 py-1 rounded-lg text-sm font-bold'
-                                            }, 'Servito')
-                                        )
+                                        h('button', {
+                                            onClick: function() { updateOrderStatus(order.id, 'served'); },
+                                            className: 'bg-green-500 text-white px-3 py-1 rounded-lg text-sm font-bold'
+                                        }, '✓ Servito')
                                     )
                                 );
                             })
@@ -390,8 +360,8 @@
                         )
                     ),
 
-                    // CALLS TAB
-                    tab === 'calls' && h('div', {className: 'space-y-3'},
+                    // CALLS TAB (waiters only)
+                    tab === 'calls' && isWaiter && h('div', {className: 'space-y-3'},
                         calls.length === 0 
                             ? h('div', {className: 'text-center py-16'},
                                 h('div', {className: 'text-6xl mb-4'}, '🔔'),
@@ -415,8 +385,8 @@
                             })
                     ),
 
-                    // TABLES TAB
-                    tab === 'tables' && h('div', {className: 'space-y-3'},
+                    // TABLES TAB (waiters only)
+                    tab === 'tables' && isWaiter && h('div', {className: 'space-y-3'},
                         tables.sort(function(a,b) { return a.number - b.number; }).map(function(table) {
                             var booking = bookings.find(function(b) { return b.tableId === table.id; });
                             var tableOrders = orders.filter(function(o) { return o.tableId === table.id; });
@@ -440,88 +410,11 @@
                                 )
                             );
                         })
-                    ),
-
-                    // STAFF TAB
-                    tab === 'staff' && h('div', {className: 'space-y-3'},
-                        h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-4 mb-4'},
-                            h('div', {className: 'flex justify-between items-center'},
-                                h('div', {},
-                                    h('h3', {className: 'text-white font-bold'}, 'Check-in/out Staff'),
-                                    h('p', {className: 'text-purple-300 text-sm'}, 'Scansiona il QR del badge')
-                                ),
-                                h('button', {
-                                    onClick: function() { setShowScanner(true); },
-                                    className: 'bg-gradient-to-r from-pink-500 to-purple-600 text-white px-4 py-3 rounded-lg font-bold'
-                                }, '📷 Scansiona QR')
-                            )
-                        ),
-                        h('h2', {className: 'text-white font-bold mb-3'}, 'Staff in Servizio'),
-                        staff.filter(function(s) { return s.status === 'on-duty'; }).length === 0
-                            ? h('p', {className: 'text-purple-300 text-center py-4'}, 'Nessuno in servizio')
-                            : staff.filter(function(s) { return s.status === 'on-duty'; }).map(function(member) {
-                                var checkIn = member.checkInTime ? new Date(member.checkInTime) : null;
-                                var hours = checkIn ? ((new Date() - checkIn) / (1000 * 60 * 60)).toFixed(1) : 0;
-                                return h('div', {key: member.id, className: 'bg-green-500/10 border border-green-400/40 rounded-xl p-4'},
-                                    h('div', {className: 'flex justify-between items-center'},
-                                        h('div', {className: 'flex items-center gap-3'},
-                                            h('div', {className: 'w-3 h-3 rounded-full bg-green-400 animate-pulse'}),
-                                            h('div', {},
-                                                h('div', {className: 'text-white font-bold'}, member.name),
-                                                h('div', {className: 'text-green-300 text-sm'}, member.role)
-                                            )
-                                        ),
-                                        h('div', {className: 'text-right'},
-                                            h('div', {className: 'text-white font-bold'}, hours, 'h'),
-                                            checkIn && h('div', {className: 'text-purple-300 text-xs'}, 'dalle ', checkIn.toLocaleTimeString('it-IT', {hour: '2-digit', minute: '2-digit'}))
-                                        )
-                                    )
-                                );
-                            }),
-                        
-                        h('h2', {className: 'text-white font-bold mb-3 mt-6'}, 'Non in Servizio'),
-                        staff.filter(function(s) { return s.status !== 'on-duty'; }).map(function(member) {
-                            return h('div', {key: member.id, className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-4'},
-                                h('div', {className: 'flex items-center gap-3'},
-                                    h('div', {className: 'w-3 h-3 rounded-full bg-slate-500'}),
-                                    h('div', {},
-                                        h('div', {className: 'text-white font-bold'}, member.name),
-                                        h('div', {className: 'text-purple-300 text-sm'}, member.role)
-                                    )
-                                )
-                            );
-                        })
                     )
                 ),
 
-                // QR Scanner Modal
-                showScanner && h('div', {className: 'fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4'},
-                    h('div', {className: 'bg-slate-800 border border-purple-500/30 rounded-xl p-6 w-full max-w-md'},
-                        h('div', {className: 'flex justify-between items-center mb-4'},
-                            h('h2', {className: 'text-xl font-bold text-white'}, '📷 Scansiona Badge'),
-                            h('button', {
-                                onClick: function() { 
-                                    setShowScanner(false); 
-                                    setScanResult(null);
-                                    if (scannerRef.current) {
-                                        scannerRef.current.stop().catch(function() {});
-                                        scannerRef.current = null;
-                                    }
-                                },
-                                className: 'text-purple-300 text-2xl'
-                            }, '✕')
-                        ),
-                        !scanResult && h('div', {id: 'qr-reader', className: 'mb-4'}),
-                        scanResult && h('div', {className: 'text-center py-8 ' + (scanResult.success ? 'bg-green-500/20' : 'bg-red-500/20') + ' rounded-xl'},
-                            h('div', {className: 'text-6xl mb-4'}, scanResult.success ? '✓' : '✕'),
-                            h('p', {className: scanResult.success ? 'text-green-300 text-xl font-bold' : 'text-red-300 text-lg'}, scanResult.message)
-                        ),
-                        h('p', {className: 'text-purple-300 text-sm text-center'}, 'Inquadra il QR code del badge staff')
-                    )
-                ),
-
-                // Floating notification for calls
-                calls.length > 0 && tab !== 'calls' && h('button', {
+                // Floating notification for calls (waiters only)
+                isWaiter && calls.length > 0 && tab !== 'calls' && h('button', {
                     onClick: function() { setTab('calls'); },
                     className: 'fixed bottom-6 right-6 bg-orange-500 text-white px-6 py-4 rounded-full shadow-lg flex items-center gap-2 animate-bounce'
                 }, '🔔 ', calls.length)
