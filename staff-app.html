@@ -126,19 +126,82 @@
                 };
             }, []);
 
-            // Toggle check-in/out for current staff
-            var toggleMyCheckIn = async function() {
-                var params = new URLSearchParams(window.location.search);
-                var eventId = params.get('event');
-                var now = new Date().toISOString();
-                var isCheckingIn = currentStaff.status === 'off-duty' || !currentStaff.status;
+            // Handle QR scan
+            var handleQrScan = async function(decodedText) {
+                try {
+                    var data = JSON.parse(decodedText);
+                    
+                    if (data.type === 'event-checkin' && data.eventId) {
+                        var params = new URLSearchParams(window.location.search);
+                        var currentEventId = params.get('event');
+                        
+                        if (data.eventId !== currentEventId) {
+                            setScanResult({ success: false, message: 'QR di un evento diverso!' });
+                            return;
+                        }
 
-                await db.collection('events').doc(eventId).collection('staff').doc(currentStaff.id).update(
-                    isCheckingIn 
-                        ? { status: 'on-duty', checkInTime: now }
-                        : { status: 'off-duty', checkOutTime: now }
-                );
+                        // Toggle check-in/out
+                        var now = new Date().toISOString();
+                        var isCheckingIn = currentStaff.status === 'off-duty' || !currentStaff.status;
+
+                        await db.collection('events').doc(currentEventId).collection('staff').doc(currentStaff.id).update(
+                            isCheckingIn 
+                                ? { status: 'on-duty', checkInTime: now }
+                                : { status: 'off-duty', checkOutTime: now }
+                        );
+
+                        setScanResult({ 
+                            success: true, 
+                            message: isCheckingIn ? 'CHECK-IN ✓' : 'CHECK-OUT ✓',
+                            action: isCheckingIn ? 'check-in' : 'check-out'
+                        });
+
+                        // Stop scanner and close after 2 seconds
+                        if (scannerRef.current) {
+                            scannerRef.current.stop().catch(function() {});
+                            scannerRef.current = null;
+                        }
+                        setTimeout(function() {
+                            setShowScanner(false);
+                            setScanResult(null);
+                        }, 2000);
+                    } else {
+                        setScanResult({ success: false, message: 'QR non valido' });
+                    }
+                } catch(e) {
+                    console.error(e);
+                    setScanResult({ success: false, message: 'Errore lettura QR' });
+                }
             };
+
+            // Start QR scanner
+            useEffect(function() {
+                if (showScanner && !scannerRef.current) {
+                    setTimeout(function() {
+                        try {
+                            scannerRef.current = new Html5Qrcode("qr-reader");
+                            scannerRef.current.start(
+                                { facingMode: "environment" },
+                                { fps: 10, qrbox: { width: 250, height: 250 } },
+                                handleQrScan,
+                                function(err) { /* ignore */ }
+                            ).catch(function(err) {
+                                console.error("Scanner error:", err);
+                                setScanResult({ success: false, message: 'Impossibile accedere alla fotocamera' });
+                            });
+                        } catch(e) {
+                            console.error("Scanner init error:", e);
+                        }
+                    }, 100);
+                }
+
+                return function() {
+                    if (scannerRef.current) {
+                        scannerRef.current.stop().catch(function() {});
+                        scannerRef.current = null;
+                    }
+                };
+            }, [showScanner, currentStaff]);
 
             // Clear waiter call
             var clearCall = async function(cid) {
@@ -168,7 +231,7 @@
             var getWorkedHours = function() {
                 if (!currentStaff || !currentStaff.checkInTime) return 0;
                 var checkIn = new Date(currentStaff.checkInTime);
-                var checkOut = currentStaff.checkOutTime ? new Date(currentStaff.checkOutTime) : new Date();
+                var checkOut = currentStaff.checkOutTime && currentStaff.status === 'off-duty' ? new Date(currentStaff.checkOutTime) : new Date();
                 return ((checkOut - checkIn) / (1000 * 60 * 60)).toFixed(1);
             };
 
@@ -238,9 +301,9 @@
                                 ' • ', getWorkedHours(), 'h'
                             ),
                             h('button', {
-                                onClick: toggleMyCheckIn,
+                                onClick: function() { setShowScanner(true); },
                                 className: 'w-full py-4 rounded-xl font-bold text-xl mt-4 ' + (isOnDuty ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-green-500 hover:bg-green-600 text-white')
-                            }, isOnDuty ? '⏹ CHECK-OUT' : '▶ CHECK-IN')
+                            }, '📷 Scansiona QR per ', isOnDuty ? 'CHECK-OUT' : 'CHECK-IN')
                         ),
 
                         // Today stats (for waiters)
@@ -272,6 +335,11 @@
                                     h('span', {className: 'text-green-400 font-bold'}, '€', (getWorkedHours() * currentStaff.hourlyRate).toFixed(2))
                                 )
                             )
+                        ),
+
+                        // Instructions
+                        h('div', {className: 'bg-slate-800/30 border border-purple-500/20 rounded-xl p-4'},
+                            h('p', {className: 'text-purple-300 text-sm text-center'}, '💡 Scansiona il QR esposto in cassa per registrare il tuo ingresso e uscita')
                         )
                     ),
 
@@ -410,6 +478,32 @@
                                 )
                             );
                         })
+                    )
+                ),
+
+                // QR Scanner Modal
+                showScanner && h('div', {className: 'fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4'},
+                    h('div', {className: 'bg-slate-800 border border-purple-500/30 rounded-xl p-6 w-full max-w-md'},
+                        h('div', {className: 'flex justify-between items-center mb-4'},
+                            h('h2', {className: 'text-xl font-bold text-white'}, '📷 Scansiona QR Serata'),
+                            h('button', {
+                                onClick: function() { 
+                                    setShowScanner(false); 
+                                    setScanResult(null);
+                                    if (scannerRef.current) {
+                                        scannerRef.current.stop().catch(function() {});
+                                        scannerRef.current = null;
+                                    }
+                                },
+                                className: 'text-purple-300 text-2xl'
+                            }, '✕')
+                        ),
+                        !scanResult && h('div', {id: 'qr-reader', className: 'mb-4'}),
+                        scanResult && h('div', {className: 'text-center py-8 ' + (scanResult.success ? 'bg-green-500/20' : 'bg-red-500/20') + ' rounded-xl'},
+                            h('div', {className: 'text-6xl mb-4'}, scanResult.success ? '✓' : '✕'),
+                            h('p', {className: scanResult.success ? 'text-green-300 text-2xl font-bold' : 'text-red-300 text-lg'}, scanResult.message)
+                        ),
+                        !scanResult && h('p', {className: 'text-purple-300 text-sm text-center'}, 'Inquadra il QR esposto in cassa')
                     )
                 ),
 
