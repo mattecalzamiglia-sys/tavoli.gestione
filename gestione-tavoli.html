@@ -676,7 +676,7 @@
                                     onClick: () => {
                                         const name = prompt('Nome:');
                                         if (!name) return;
-                                        const role = prompt('Ruolo (es: Cameriere, Barista):');
+                                        const role = prompt('Ruolo (es: Cameriere, Barista, Sicurezza):');
                                         if (!role) return;
                                         const phone = prompt('Telefono (opz):') || '';
                                         const rate = parseFloat(prompt('Paga oraria € (opz):') || '0');
@@ -687,6 +687,7 @@
                             h('div', {className: 'space-y-3'},
                                 staff.map(member => {
                                     const isOn = member.status === 'on-duty';
+                                    const isWaiter = member.role && (member.role.toLowerCase() === 'cameriere' || member.role.toLowerCase() === 'cameriera');
                                     let hours = 0;
                                     if (member.checkInTime) {
                                         const checkIn = new Date(member.checkInTime);
@@ -699,11 +700,22 @@
                                                 h('div', {className: `w-3 h-3 rounded-full mt-2 ${isOn ? 'bg-green-400' : 'bg-slate-500'}`}),
                                                 h('div', {},
                                                     h('h3', {className: 'text-white font-bold text-lg'}, member.name),
-                                                    h('p', {className: 'text-purple-300 text-sm'}, member.role),
+                                                    h('p', {className: 'text-purple-300 text-sm'}, member.role, isWaiter ? ' 🍽️' : ''),
                                                     member.phone && h('p', {className: 'text-purple-400 text-xs'}, member.phone)
                                                 )
                                             ),
-                                            h('button', {className: 'text-red-400', onClick: () => deleteStaffMember(member.id)}, TrashIcon(16))
+                                            h('div', {className: 'flex gap-2'},
+                                                h('button', {
+                                                    className: 'text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded text-xs',
+                                                    onClick: () => {
+                                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                                        const link = base + 'staff-app.html?event=' + currentEvent.id + '&staff=' + member.id;
+                                                        navigator.clipboard.writeText(link);
+                                                        alert('Link copiato per ' + member.name + '!\\n\\n' + link);
+                                                    }
+                                                }, '🔗 Link'),
+                                                h('button', {className: 'text-red-400', onClick: () => deleteStaffMember(member.id)}, TrashIcon(16))
+                                            )
                                         ),
                                         h('div', {className: 'grid grid-cols-3 gap-2 mb-3'},
                                             h('div', {className: 'bg-slate-900/50 rounded p-2 text-center'}, h('div', {className: 'text-purple-300 text-xs'}, 'Check-in'), h('div', {className: 'text-white text-sm'}, member.checkInTime ? new Date(member.checkInTime).toLocaleTimeString('it-IT', {hour:'2-digit',minute:'2-digit'}) : '-')),
@@ -716,7 +728,7 @@
                                         }, isOn ? '⏹ Check-out' : '▶ Check-in')
                                     );
                                 }),
-                                staff.length === 0 && h('p', {className: 'text-purple-300 text-center py-16'}, 'Nessuno staff')
+                                staff.length === 0 && h('p', {className: 'text-purple-300 text-center py-16'}, 'Nessuno staff. Aggiungi camerieri, baristi, sicurezza...')
                             )
                         ),
                         h('div', {className: 'space-y-6'},
@@ -725,6 +737,7 @@
                                 h('div', {className: 'space-y-3'},
                                     h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'Totale'), h('span', {className: 'text-white font-bold'}, staff.length)),
                                     h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'In servizio'), h('span', {className: 'text-green-400 font-bold'}, staff.filter(s => s.status === 'on-duty').length)),
+                                    h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'Camerieri'), h('span', {className: 'text-cyan-400 font-bold'}, staff.filter(s => s.role && (s.role.toLowerCase() === 'cameriere' || s.role.toLowerCase() === 'cameriera')).length)),
                                     h('div', {className: 'flex justify-between'}, h('span', {className: 'text-purple-300'}, 'Costo totale'), h('span', {className: 'text-yellow-400 font-bold'}, '€', staff.reduce((sum, m) => {
                                         if (!m.hourlyRate || !m.checkInTime) return sum;
                                         const checkIn = new Date(m.checkInTime);
@@ -732,6 +745,15 @@
                                         const hours = (checkOut - checkIn) / (1000 * 60 * 60);
                                         return sum + (hours * m.hourlyRate);
                                     }, 0).toFixed(0)))
+                                )
+                            ),
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                                h('h3', {className: 'text-lg font-bold text-white mb-3'}, '💡 Come funziona'),
+                                h('div', {className: 'text-purple-300 text-sm space-y-2'},
+                                    h('p', {}, '1. Aggiungi lo staff con nome e ruolo'),
+                                    h('p', {}, '2. Clicca "🔗 Link" per copiare il link personale'),
+                                    h('p', {}, '3. Invia il link al membro dello staff'),
+                                    h('p', {}, '4. I ', h('strong', {}, 'Camerieri'), ' vedranno anche ordini e chiamate')
                                 )
                             )
                         )
