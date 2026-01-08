@@ -518,6 +518,20 @@
                                     ),
                                     h('button', {className: 'text-purple-300', onClick: () => setShowFullGuestList(false)}, XIcon(24))
                                 ),
+                                h('input', {
+                                    type: 'text',
+                                    placeholder: '🔍 Cerca ospite...',
+                                    className: 'w-full bg-slate-900 border border-purple-500/30 rounded-lg px-4 py-3 text-white mb-4',
+                                    id: 'guest-search',
+                                    onInput: (e) => {
+                                        const search = e.target.value.toLowerCase();
+                                        document.querySelectorAll('.guest-row').forEach(row => {
+                                            const name = row.dataset.name.toLowerCase();
+                                            const pr = row.dataset.pr.toLowerCase();
+                                            row.style.display = (name.includes(search) || pr.includes(search)) ? '' : 'none';
+                                        });
+                                    }
+                                }),
                                 h('div', {className: 'flex gap-2 mb-4'},
                                     h('div', {className: 'bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-sm'}, '✓ Check-in: ', guestLists.filter(g => g.checkedIn).length),
                                     h('div', {className: 'bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full text-sm'}, '⏳ In attesa: ', guestLists.filter(g => !g.checkedIn).length),
@@ -539,7 +553,12 @@
                                                 return (a.guestName || '').localeCompare(b.guestName || '');
                                             }).map(guest => {
                                                 const pr = prs.find(p => p.id === guest.prId);
-                                                return h('tr', {key: guest.id, className: 'border-b border-slate-700/50 ' + (guest.checkedIn ? 'opacity-60' : '')},
+                                                return h('tr', {
+                                                    key: guest.id, 
+                                                    className: 'guest-row border-b border-slate-700/50 ' + (guest.checkedIn ? 'opacity-60' : ''),
+                                                    'data-name': guest.guestName || '',
+                                                    'data-pr': pr ? pr.name : ''
+                                                },
                                                     h('td', {className: 'px-3 py-3'},
                                                         h('span', {className: 'text-white font-medium'}, guest.guestName)
                                                     ),
@@ -550,9 +569,17 @@
                                                         h('span', {className: 'text-cyan-300'}, guest.guestCount || 1)
                                                     ),
                                                     h('td', {className: 'px-3 py-3 text-center'},
-                                                        guest.checkedIn 
-                                                            ? h('span', {className: 'bg-green-500/20 text-green-300 px-2 py-1 rounded-full text-xs'}, '✓ Arrivato')
-                                                            : h('span', {className: 'bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded-full text-xs'}, '⏳ Atteso')
+                                                        h('button', {
+                                                            className: guest.checkedIn 
+                                                                ? 'bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-xs hover:bg-green-500/40 transition-colors'
+                                                                : 'bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full text-xs hover:bg-yellow-500/40 transition-colors',
+                                                            onClick: async () => {
+                                                                await db.collection('events').doc(currentEvent.id).collection('guestLists').doc(guest.id).update({
+                                                                    checkedIn: !guest.checkedIn,
+                                                                    checkedInAt: !guest.checkedIn ? new Date().toISOString() : null
+                                                                });
+                                                            }
+                                                        }, guest.checkedIn ? '✓ Arrivato' : '⏳ Atteso')
                                                     )
                                                 );
                                             })
