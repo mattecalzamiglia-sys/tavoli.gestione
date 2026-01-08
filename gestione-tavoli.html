@@ -748,12 +748,25 @@
                                 )
                             ),
                             h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
+                                h('h3', {className: 'text-lg font-bold text-white mb-3'}, '📷 QR Check-in Serata'),
+                                h('p', {className: 'text-purple-300 text-sm mb-4'}, 'Genera il QR da mostrare allo staff per timbrare'),
+                                h('button', {
+                                    className: 'w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 rounded-lg font-bold',
+                                    onClick: () => {
+                                        const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+                                        const link = base + 'event-qr.html?event=' + currentEvent.id;
+                                        window.open(link, '_blank');
+                                    }
+                                }, '📱 Mostra QR Serata')
+                            ),
+                            h('div', {className: 'bg-slate-800/50 border border-purple-500/30 rounded-xl p-6'},
                                 h('h3', {className: 'text-lg font-bold text-white mb-3'}, '💡 Come funziona'),
                                 h('div', {className: 'text-purple-300 text-sm space-y-2'},
                                     h('p', {}, '1. Aggiungi lo staff con nome e ruolo'),
                                     h('p', {}, '2. Clicca "🔗 Link" per copiare il link personale'),
                                     h('p', {}, '3. Invia il link al membro dello staff'),
-                                    h('p', {}, '4. I ', h('strong', {}, 'Camerieri'), ' vedranno anche ordini e chiamate')
+                                    h('p', {}, '4. Lo staff scansiona il QR serata per check-in/out'),
+                                    h('p', {}, '5. I ', h('strong', {}, 'Camerieri'), ' vedono anche ordini e chiamate')
                                 )
                             )
                         )
